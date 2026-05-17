@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 400" role="img" aria-label="Asking Q and A flat owl mascot">
+  <defs><style>.body{fill:#111827;stroke:#27272a;stroke-width:4}.panel{fill:#09090b;stroke:#34d399;stroke-width:4}.eye{fill:#fafafa}.pupil{fill:#09090b}.beak{fill:#a78bfa}.bubble{fill:#18181b;stroke:#3f3f46;stroke-width:4}.mark{fill:#fafafa}.foot{fill:#f59e0b}</style></defs>
+  <rect class="body" x="60" y="88" width="178" height="236" rx="54"/>
+  <path class="body" d="M78 100 116 126 68 138Z"/><path class="body" d="M222 100 184 126 232 138Z"/>
+  <rect class="panel" x="74" y="116" width="150" height="74" rx="21" transform="rotate(4 149 153)"/>
+  <circle class="eye" cx="118" cy="154" r="18"/><circle class="eye" cx="180" cy="154" r="18"/>
+  <circle class="pupil" cx="126" cy="154" r="8"/><circle class="pupil" cx="188" cy="150" r="8"/>
+  <path class="beak" d="M150 184 136 162h28Z"/>
+  <path class="body" d="M218 230c32 4 50 28 40 52-28-2-50-18-62-42z"/>
+  <path class="bubble" d="M228 84h54a24 24 0 0 1 24 24v34a24 24 0 0 1-24 24h-24l-24 24 8-26h-14a24 24 0 0 1-24-24v-32a24 24 0 0 1 24-24z"/>
+  <path class="mark" d="M258 132c0-18 24-14 24-30 0-12-12-18-24-18-10 0-18 4-24 12l10 10c4-6 8-8 14-8 6 0 10 4 10 8 0 10-24 12-24 30v4h14z"/><circle class="mark" cx="252" cy="154" r="6"/>
+  <ellipse class="foot" cx="108" cy="334" rx="17" ry="10"/><ellipse class="foot" cx="184" cy="334" rx="17" ry="10"/>
+</svg>

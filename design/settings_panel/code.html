@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Settings Panel (Narrow)</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "on-tertiary-fixed": "#004b33",
+                "surface-container-high": "#1e1f29",
+                "surface-container-low": "#12131b",
+                "on-error-container": "#ff97a3",
+                "surface-bright": "#2a2b38",
+                "inverse-primary": "#684cb6",
+                "surface": "#0d0e14",
+                "on-primary": "#482995",
+                "surface-container-highest": "#242531",
+                "tertiary-fixed": "#6bffc1",
+                "surface-tint": "#cebdff",
+                "on-primary-fixed": "#000000",
+                "primary-dim": "#a88cfb",
+                "on-secondary-fixed": "#3e3f47",
+                "outline": "#747483",
+                "on-tertiary": "#006948",
+                "background": "#0d0e14",
+                "on-primary-fixed-variant": "#2e007c",
+                "outline-variant": "#464754",
+                "surface-container": "#181922",
+                "secondary": "#c6c5cf",
+                "on-secondary-container": "#bfbec8",
+                "primary-container": "#5b3ea8",
+                "error-dim": "#c44b5f",
+                "primary-fixed-dim": "#987cea",
+                "secondary-fixed-dim": "#d4d3dd",
+                "surface-variant": "#242531",
+                "on-secondary-fixed-variant": "#5a5b63",
+                "tertiary-container": "#6bffc1",
+                "tertiary-fixed-dim": "#5af0b4",
+                "secondary-fixed": "#e3e1ec",
+                "surface-dim": "#0d0e14",
+                "on-error": "#490013",
+                "secondary-container": "#3a3b43",
+                "on-secondary": "#3f4048",
+                "on-surface": "#e5e4f5",
+                "tertiary": "#cdffe3",
+                "inverse-on-surface": "#55545c",
+                "on-surface-variant": "#aaaab9",
+                "on-background": "#e5e4f5",
+                "tertiary-dim": "#5af0b4",
+                "surface-container-lowest": "#000000",
+                "on-primary-container": "#e9deff",
+                "secondary-dim": "#b9b8c2",
+                "primary": "#cebdff",
+                "error": "#f97386",
+                "primary-fixed": "#a589f8",
+                "on-tertiary-container": "#006042",
+                "error-container": "#871c34",
+                "on-tertiary-fixed-variant": "#006b4a",
+                "inverse-surface": "#fbf8ff"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {},
+        "fontFamily": {
+                "headline": [
+                        "Geist"
+                ],
+                "display": [
+                        "Geist"
+                ],
+                "body": [
+                        "Geist"
+                ],
+                "label": [
+                        "Geist"
+                ]
+        },
+        "fontSize": {}
+},
+    },
+  }
+</script>
+<style>
+        /* High-density Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #242531;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #464754;
+        }
+        
+        /* Form Field Base Reset */
+        input:focus, select:focus, textarea:focus {
+            box-shadow: none !important;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body h-screen w-full flex overflow-hidden antialiased justify-center">
+<!-- SETTINGS PANEL (The requested 420px narrow right-side panel) -->
+<aside class="w-full md:w-[420px] h-full flex flex-col bg-surface-container border-x border-outline-variant flex-shrink-0 z-10 shadow-[-8px_0_24px_rgba(0,0,0,0.5)]">
+<!-- Panel Header -->
+<header class="flex items-center justify-between px-5 py-4 border-b border-outline-variant shrink-0 bg-surface">
+<div class="flex items-center">
+<h1 class="font-headline font-bold text-base tracking-tighter text-on-surface">Settings</h1>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors p-1 rounded-md hover:bg-surface-container-high md:hidden">
+<span class="material-symbols-outlined text-xl">close</span>
+</button>
+</header>
+<!-- Scrollable Configuration Content -->
+<div class="flex-1 overflow-y-auto p-5 space-y-6" style="padding-bottom: 20px;">
+<!-- Section 1: Text AI Provider -->
+<section class="space-y-4">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-sm" style='font-variation-settings: "FILL" 1;'>memory</span>
+<h2 class="font-headline text-xs font-semibold text-primary uppercase tracking-widest">Text AI Provider</h2>
+</div>
+<div class="space-y-3 p-4 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="space-y-1.5">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">API URL</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-mono" type="text" value="https://api.openai.com/v1"/>
+</div>
+<div class="space-y-1.5">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider flex justify-between">
+<span class="">API Key</span>
+<span class="text-secondary cursor-pointer hover:text-primary transition-colors">Verify</span>
+</label>
+<div class="relative">
+<input class="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-mono pr-8" type="password" value="sk-proj-9x8f7d6e5c4b3a21..."/>
+<button class="absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
+<span class="material-symbols-outlined text-sm">visibility_off</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-3 pt-1">
+<div class="space-y-1.5">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Model</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-mono" type="text" value="gpt-4-turbo"/>
+</div>
+<div class="space-y-1.5 flex flex-col justify-end">
+<label class="flex items-center justify-between cursor-pointer py-1.5 px-2 bg-surface border border-outline-variant rounded hover:border-primary/50 transition-colors">
+<span class="text-xs font-medium text-on-surface">Stream Output</span>
+<div class="relative flex items-center">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-7 h-4 bg-surface-container-highest rounded-full peer peer-checked:bg-primary transition-colors border border-outline-variant peer-checked:border-primary"></div>
+<div class="absolute left-[2px] top-[2px] bg-on-primary w-3 h-3 rounded-full transition-transform peer-checked:translate-x-3"></div>
+</div>
+</label>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Image AI Provider -->
+<section class="space-y-4">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-sm" style='font-variation-settings: "FILL" 1;'>image</span>
+<h2 class="font-headline text-xs font-semibold text-primary uppercase tracking-widest">Image AI Provider</h2>
+</div>
+<div class="space-y-3 p-4 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="space-y-1.5">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">API URL</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-mono opacity-50 cursor-not-allowed" disabled="" type="text" value="https://api.openai.com/v1"/>
+</div>
+<div class="space-y-1.5">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">API Key</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-mono" type="password" value="sk-proj-1a2b3c..."/>
+</div>
+<div class="space-y-1.5">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Model</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-mono" type="text" value="dall-e-3"/>
+</div>
+</div>
+</section>
+<!-- Section 4: UI Preferences -->
+<section class="space-y-4">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-sm" style='font-variation-settings: "FILL" 1;'>dashboard_customize</span>
+<h2 class="font-headline text-xs font-semibold text-primary uppercase tracking-widest">UI Preferences</h2>
+</div>
+<div class="space-y-5 p-4 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="space-y-2">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Panel Position</label>
+<div class="flex bg-surface border border-outline-variant rounded p-1">
+<button class="flex-1 py-1.5 text-xs font-medium text-on-surface-variant rounded hover:text-on-surface transition-colors text-center">Left</button>
+<button class="flex-1 py-1.5 text-xs font-medium text-on-surface bg-surface-container-highest rounded border border-outline-variant shadow-sm text-center">Right</button>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Panel Width</label>
+<span class="text-[11px] font-mono text-primary">420px</span>
+</div>
+<input class="w-full accent-primary h-1 bg-outline-variant rounded-full appearance-none outline-none cursor-pointer" max="640" min="320" type="range" value="420"/>
+<div class="flex justify-between text-[10px] text-on-surface-variant">
+<span class="">Narrow</span>
+<span class="">Wide</span>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="block text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Panel Height</label>
+<span class="text-[11px] font-mono text-primary">1080px</span>
+</div>
+<input class="w-full accent-primary h-1 bg-outline-variant rounded-full appearance-none outline-none cursor-pointer" max="1080" min="400" type="range" value="1080"/>
+<div class="flex justify-between text-[10px] text-on-surface-variant">
+<span class="">Short</span>
+<span class="">Tall</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<footer class="sticky bottom-0 border-t border-outline-variant bg-surface p-5 flex flex-col gap-3 shrink-0">
+<div class="flex gap-3">
+<button class="flex-1 flex items-center justify-center gap-2 py-2 px-3 border border-outline-variant rounded text-xs font-medium text-on-surface hover:bg-surface-container-high transition-all focus:outline-none focus:ring-1 focus:ring-primary">
+<span class="material-symbols-outlined text-sm">close</span>
+      Discard Changes
+    </button>
+<button class="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-primary text-on-primary rounded text-xs font-bold hover:bg-primary/90 transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-primary focus:ring-offset-1 focus:ring-offset-surface">
+<span class="material-symbols-outlined text-sm">check</span>
+      Save Configuration
+    </button>
+</div>
+</footer>
+</aside>
+<!-- SHARED COMPONENT: SideNavBar (Web Only) -->
+<!-- Executing specific style instructions from JSON -->
+<nav class="hidden md:flex flex-col w-16 h-full items-center py-4 bg-surface-container-low border-l border-outline-variant shrink-0 z-20"><img alt="Mascot" class="h-8 w-auto mb-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBf7W0kF8dnu9HbLPO9mdb0wvBoQp2JL1YROfVocmmq2d50eNUC9__rhE7FhQiREZQbjhfAZp2rqIYU_PzBAX4LJSKsj8NE8W0YH0926_rodnyPScl57wyXLDeH_wxSLYlUYf7td1K0r6b0I11ZVpkU9uznYGz7R5cXu2rXXeNxkmXTx5Ecie87Sk3IXoE02tSLXITLaqwSWz0CxPvnR0XZlM5ZmbyilPlh8_TcoSttjOq9J2lcxlPnJMcRMBJohthRNuaHYXAm62E"/><div class="w-8 h-px bg-outline-variant mb-4"></div><button class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">description</span>
+</button>
+<button class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">forum</span>
+</button>
+<button class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">auto_awesome_motion</span>
+</button>
+<button class="w-12 h-12 rounded-xl flex items-center justify-center bg-primary/10 text-primary hover:bg-primary/20 transition-colors group relative">
+<span class="material-symbols-outlined" style='font-variation-settings: "FILL" 1;'>settings</span>
+</button>
+<div class="flex-1"></div></nav>
+<!-- SHARED COMPONENT: BottomNavBar (Mobile Only) -->
+<!-- Suppressed active state since Settings intent is not present in bottom nav options -->
+<nav class="md:hidden fixed bottom-0 right-0 w-80 z-50 flex justify-end gap-2 p-3 bg-surface-container-highest border-t border-outline-variant rounded-tl-xl shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
+<!-- Item: Summarize (Inactive) -->
+<button class="flex items-center gap-1.5 font-body text-label-xs font-bold hover:brightness-110 active:translate-y-0.5 transition-transform text-on-surface-variant border border-outline-variant rounded-lg px-3 py-1 bg-surface-container">
+<span class="material-symbols-outlined text-sm">bolt</span>
+<span class="">Summarize</span>
+</button>
+<!-- Item: Export PNG (Inactive) -->
+<button class="flex items-center gap-1.5 font-body text-label-xs font-bold hover:brightness-110 active:translate-y-0.5 transition-transform text-on-surface-variant border border-outline-variant rounded-lg px-3 py-1 bg-surface-container">
+<span class="material-symbols-outlined text-sm">image</span>
+<span class="">Export PNG</span>
+</button>
+</nav>
+</body></html>

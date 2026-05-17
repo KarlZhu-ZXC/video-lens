@@ -1,0 +1,26 @@
+{
+  "name": "video-summary",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "test:minimax": "RUN_MINIMAX_INTEGRATION=1 vitest run test/minimax.integration.test.ts",
+    "dev:harness": "vite --host 127.0.0.1",
+    "dev": "vite build --watch --mode development"
+  },
+  "dependencies": {
+    "html-to-image": "^1.11.13",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/tampermonkey": "^5.0.4",
+    "playwright": "^1.60.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vite-plugin-monkey": "^4.0.6",
+    "vitest": "^2.1.4"
+  }
+}

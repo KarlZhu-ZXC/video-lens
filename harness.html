@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Summary Panel Harness</title>
+    <style>
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background: #18181b;
+        color: #fafafa;
+        font-family: Geist, ui-sans-serif, system-ui;
+      }
+      .page-copy {
+        width: min(640px, calc(100vw - 48px));
+        padding: 48px;
+      }
+      .page-copy h1 {
+        margin: 0 0 12px;
+        font-size: 32px;
+      }
+      .page-copy p {
+        margin: 0;
+        color: #a1a1aa;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-copy">
+      <h1>Mock Bilibili Video Page</h1>
+      <p>Use query scenarios: default, long-summary, settings, one-image, error.</p>
+    </div>
+    <script type="module" src="/src/harness/ui-panel-harness.ts"></script>
+  </body>
+</html>

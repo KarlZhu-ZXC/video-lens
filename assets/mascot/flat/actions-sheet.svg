@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" role="img" aria-labelledby="title desc">
+  <title id="title">Video Summary flat owl mascot action sheet</title>
+  <desc id="desc">Eight flat action poses for the video clipping owl mascot.</desc>
+  <defs>
+    <style>
+      .body{fill:#111827;stroke:#27272a;stroke-width:4}.panel{fill:#09090b;stroke:#34d399;stroke-width:4}
+      .eye{fill:#fafafa}.pupil{fill:#09090b}.beak{fill:#a78bfa}.mint{fill:#34d399}.line{fill:#71717a}
+      .card{fill:#18181b;stroke:#3f3f46;stroke-width:4}.foot{fill:#f59e0b}.violet{fill:#a78bfa}
+    </style>
+    <g id="base">
+      <rect class="body" x="70" y="58" width="190" height="250" rx="56"/>
+      <path class="body" d="M90 70 130 98 78 112Z"/><path class="body" d="M240 70 200 98 252 112Z"/>
+      <rect class="panel" x="84" y="88" width="162" height="78" rx="22" transform="rotate(-2 165 127)"/>
+      <circle class="eye" cx="132" cy="126" r="19"/><circle class="eye" cx="198" cy="126" r="19"/>
+      <circle class="pupil" cx="132" cy="126" r="8"/><circle class="pupil" cx="198" cy="126" r="8"/>
+      <path class="beak" d="M165 158 150 136h30Z"/>
+      <ellipse class="foot" cx="126" cy="318" rx="17" ry="10"/><ellipse class="foot" cx="204" cy="318" rx="17" ry="10"/>
+    </g>
+  </defs>
+
+  <g transform="translate(0 0)">
+    <path class="body" d="M58 178c-36-28-44-66-24-88 34 16 56 48 56 88z"/><use href="#base"/>
+    <rect class="mint" x="116" y="232" width="92" height="10" rx="5"/>
+  </g>
+  <g transform="translate(320 0)">
+    <use href="#base"/><rect class="card" x="54" y="202" width="212" height="74" rx="12" transform="rotate(5 160 239)"/>
+    <rect class="eye" x="86" y="224" width="92" height="8" rx="4"/><rect class="eye" x="96" y="244" width="124" height="8" rx="4"/>
+  </g>
+  <g transform="translate(640 0)">
+    <use href="#base"/><path class="body" d="M218 204c28-10 42 18 32 42-22 0-38-14-48-34z"/>
+    <rect class="mint" x="240" y="112" width="52" height="10" rx="5"/><rect class="line" x="240" y="146" width="62" height="9" rx="5"/><rect class="line" x="240" y="178" width="44" height="9" rx="5"/>
+  </g>
+  <g transform="translate(960 0)">
+    <use href="#base"/><path class="body" d="M214 220c24 18 22 48 2 62-18-12-24-34-18-58z"/>
+    <circle class="violet" cx="242" cy="46" r="8"/><circle class="violet" cx="264" cy="70" r="6"/><circle class="violet" cx="280" cy="94" r="4"/>
+  </g>
+  <g transform="translate(0 400)">
+    <use href="#base"/><rect fill="#f8fafc" stroke="#3f3f46" stroke-width="4" x="58" y="202" width="198" height="96" rx="12"/>
+    <path fill="#94a3b8" d="M76 280 126 232 166 280Z"/><path fill="#94a3b8" d="M132 280 184 244 232 280Z"/><circle class="mint" cx="208" cy="232" r="13"/>
+  </g>
+  <g transform="translate(320 400)">
+    <use href="#base"/><path class="body" d="M218 230c32 4 50 28 40 52-28-2-50-18-62-42z"/>
+    <path class="card" d="M228 84h54a24 24 0 0 1 24 24v34a24 24 0 0 1-24 24h-24l-24 24 8-26h-14a24 24 0 0 1-24-24v-32a24 24 0 0 1 24-24z"/>
+    <text x="244" y="150" fill="#fafafa" font-family="Arial, sans-serif" font-size="72" font-weight="700">?</text>
+  </g>
+  <g transform="translate(640 400)">
+    <use href="#base"/><path class="body" d="M72 190c-40 0-58-34-50-64 34 6 58 28 70 58z"/><path class="body" d="M248 190c40 0 58-34 50-64-34 6-58 28-70 58z"/>
+    <rect class="mint" x="70" y="46" width="14" height="24" rx="3" transform="rotate(-35 77 58)"/><rect class="violet" x="230" y="42" width="14" height="24" rx="3" transform="rotate(28 237 54)"/>
+  </g>
+  <g transform="translate(960 400)">
+    <rect class="body" x="54" y="126" width="206" height="190" rx="62"/>
+    <path class="body" d="M78 136 114 160 68 172Z"/><path class="body" d="M236 136 200 160 246 172Z"/>
+    <rect class="panel" x="74" y="156" width="166" height="74" rx="22"/>
+    <path fill="none" stroke="#fafafa" stroke-width="7" stroke-linecap="round" d="M116 190q14 12 28 0M176 190q14 12 28 0"/>
+    <path class="beak" d="M158 220 144 198h28Z"/><path class="violet" d="M264 74a32 32 0 1 0 28 48 34 34 0 1 1-28-48z"/>
+  </g>
+</svg>

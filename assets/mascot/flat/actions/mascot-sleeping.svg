@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 400" role="img" aria-label="Sleeping flat owl mascot">
+  <defs><style>.body{fill:#111827;stroke:#27272a;stroke-width:4}.panel{fill:#09090b;stroke:#34d399;stroke-width:4}.eye{fill:none;stroke:#fafafa;stroke-width:7;stroke-linecap:round}.beak{fill:#a78bfa}.moon{fill:#a78bfa}.foot{fill:#f59e0b}</style></defs>
+  <rect class="body" x="54" y="126" width="206" height="190" rx="62"/>
+  <path class="body" d="M78 136 114 160 68 172Z"/><path class="body" d="M236 136 200 160 246 172Z"/>
+  <rect class="panel" x="74" y="156" width="166" height="74" rx="22" transform="rotate(1 157 193)"/>
+  <path class="eye" d="M116 190q14 12 28 0"/><path class="eye" d="M176 190q14 12 28 0"/>
+  <path class="beak" d="M158 220 144 198h28Z"/>
+  <path class="body" d="M58 248c42 16 68 14 96-6-8 42-54 66-102 52z"/><path class="body" d="M258 248c-42 16-68 14-96-6 8 42 54 66 102 52z"/>
+  <path class="moon" d="M264 74a32 32 0 1 0 28 48 34 34 0 1 1-28-48z"/><text x="258" y="164" fill="#a78bfa" font-family="Arial, sans-serif" font-size="42" font-weight="700">Z</text>
+  <ellipse class="foot" cx="118" cy="326" rx="17" ry="9"/><ellipse class="foot" cx="196" cy="326" rx="17" ry="9"/>
+</svg>

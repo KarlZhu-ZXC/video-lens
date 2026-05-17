@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html class="dark" lang="en" style="">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Video Insights</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com" rel="preconnect">
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;display=swap" rel="stylesheet">
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface": "#0c0c0f",
+                        "on-surface": "#fafafa",
+                        "surface-container": "#121215",
+                        "error-container": "#3b1111",
+                        "background": "#09090b",
+                        "primary-fixed-dim": "#c4b5fd",
+                        "outline-variant": "#27272a",
+                        "inverse-surface": "#fafafa",
+                        "on-tertiary-fixed": "#003318",
+                        "surface-dim": "#0c0c0f",
+                        "secondary-container": "#27272a",
+                        "secondary": "#71717a",
+                        "surface-tint": "#a78bfa",
+                        "on-tertiary-fixed-variant": "#047857",
+                        "surface-container-lowest": "#09090b",
+                        "on-secondary-container": "#a1a1aa",
+                        "on-secondary-fixed-variant": "#3f3f46",
+                        "on-surface-variant": "#a1a1aa",
+                        "on-tertiary": "#001a12",
+                        "surface-container-high": "#18181b",
+                        "primary-fixed": "#ede9fe",
+                        "on-secondary": "#09090b",
+                        "on-tertiary-container": "#bbf7d0",
+                        "primary-container": "#7c3aed",
+                        "on-primary": "#0a0012",
+                        "on-error-container": "#fca5a5",
+                        "on-primary-container": "#ede9fe",
+                        "primary": "#a78bfa",
+                        "inverse-primary": "#5b21b6",
+                        "tertiary-container": "#065f46",
+                        "on-primary-fixed-variant": "#5b21b6",
+                        "on-error": "#1a0000",
+                        "on-secondary-fixed": "#18181b",
+                        "on-primary-fixed": "#2e1065",
+                        "outline": "#52525b",
+                        "on-background": "#fafafa",
+                        "surface-bright": "#18181b",
+                        "tertiary-fixed": "#bbf7d0",
+                        "inverse-on-surface": "#09090b",
+                        "error": "#ef4444",
+                        "secondary-fixed-dim": "#71717a",
+                        "surface-container-highest": "#1e1e22",
+                        "tertiary": "#34d399",
+                        "secondary-fixed": "#a1a1aa",
+                        "surface-container-low": "#0f0f12",
+                        "tertiary-fixed-dim": "#6ee7b7",
+                        "surface-variant": "#18181b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Geist", "sans-serif"],
+                        "display": ["Geist", "sans-serif"],
+                        "body": ["Geist", "sans-serif"],
+                        "label": ["Geist", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Geist', sans-serif;
+        }
+    </style>
+</head>
+
+<body
+    class="bg-background text-on-surface h-screen overflow-hidden flex flex-row w-full max-w-[420px] mx-auto border-x border-outline-variant shadow-2xl relative">
+    <!-- Chat/QA Interface -->
+    <aside class="flex-1 bg-surface-container-low flex flex-col h-full z-20 shrink-0 w-0">
+        <!-- Panel Header -->
+        <div
+            class="h-14 border-b border-outline-variant flex items-center px-4 justify-between bg-surface-container shrink-0">
+            <div class="flex items-center gap-2">
+                <h2 class="font-headline font-semibold text-sm tracking-tight">Video Insights</h2>
+            </div>
+            <button
+                class="text-on-surface-variant hover:text-on-surface transition-colors p-1 rounded hover:bg-surface-container-high">
+                <span class="material-symbols-outlined text-sm">more_horiz</span>
+            </button>
+        </div>
+        <!-- Conversation Context -->
+        <div
+            class="px-4 py-2 bg-surface-container-high border-b border-outline-variant shrink-0 flex items-center gap-2">
+            <span class="material-symbols-outlined text-secondary text-xs">info</span>
+            <p class="font-body text-xs text-secondary truncate">Insights on: <span class="text-on-surface">"The core
+                    technical implementation"</span></p>
+        </div>
+        <!-- Chat History -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-6 relative">
+            <div
+                class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] overflow-hidden z-[-1]">
+                <img alt="Watermark" class="w-64 grayscale opacity-50"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCo4a8ueO84KAchWXJFk28HBlhHR9rFXKR66Yu2E4Esqdw3VQ7HEobvne3REfxcBPmcEN5A7sFdgqAyPEEI1-I7nrezx_A93Swe1f6fNSvfG_pfV4lWbLhgvLrrrjTx4jW2XdzvJICZ9GNWSxUJUti7iw045s3Jie7E_JQu-9sAEsQP84Sfy8DyF7AkWufvMgQQiuTj5OaUe-Zu2-d1NYWqSiHEo48_oFYj-yZxBGFKrJboOYC5i4qRLKrJkVOeN7VPo6EIm9c9508">
+            </div>
+            <!-- User Message -->
+            <div class="flex flex-col items-end gap-1">
+                <div class="max-w-[85%] bg-surface border border-primary p-3 rounded-xl rounded-tr-none">
+                    <p class="font-body text-sm text-on-surface">Can you explain the main algorithmic approach they used
+                        for the rendering engine?</p>
+                </div>
+                <span class="font-label text-[10px] text-on-surface-variant px-1">10:24 AM</span>
+            </div>
+            <!-- Assistant Message -->
+            <div class="flex flex-col items-start gap-1">
+                <div
+                    class="max-w-[85%] bg-surface-container-high border border-outline-variant p-3 rounded-xl rounded-tl-none">
+                    <p class="font-body text-sm text-on-surface leading-relaxed">
+                        Based on the segment from 14:20, they utilize a hybrid rasterization-raytracing pipeline.
+                        <br><br>
+                        Specifically, they use rasterization for primary visibility to keep frame rates high, while
+                        dispatching compute shaders for raytraced global illumination and reflections.
+                    </p>
+                    <!-- Source Chips -->
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <button
+                            class="flex items-center gap-1 bg-surface-container-highest border border-outline-variant px-2 py-1 rounded text-xs text-secondary hover:text-on-surface transition-colors">
+                            <span class="material-symbols-outlined text-[14px]">play_circle</span>
+                            14:20
+                        </button>
+                    </div>
+                </div>
+                <span class="font-label text-[10px] text-on-surface-variant px-1">10:25 AM</span>
+            </div>
+            <!-- User Message -->
+            <div class="flex flex-col items-end gap-1">
+                <div class="max-w-[85%] bg-surface border border-primary p-3 rounded-xl rounded-tr-none">
+                    <p class="font-body text-sm text-on-surface">What about the memory overhead?</p>
+                </div>
+                <span class="font-label text-[10px] text-on-surface-variant px-1">10:26 AM</span>
+            </div>
+            <!-- Assistant Message (Typing/Loading state - simulated) -->
+            <div class="flex flex-col items-start gap-1">
+                <div
+                    class="max-w-[85%] bg-surface-container-high border border-outline-variant p-3 rounded-xl rounded-tl-none flex items-center gap-2">
+                    <div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+                    <div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" style="animation-delay: 150ms"></div>
+                    <div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" style="animation-delay: 300ms"></div>
+                </div>
+            </div>
+        </div>
+        <!-- Input Area -->
+        <div class="p-4 bg-surface-container border-t border-outline-variant shrink-0">
+            <div class="relative flex flex-col gap-2">
+                <div
+                    class="relative flex items-end bg-surface-container-highest border border-outline-variant rounded-3xl focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all px-4 py-2">
+                    <textarea
+                        class="flex-1 bg-transparent border-none text-sm font-body text-on-surface placeholder:text-on-surface-variant resize-none py-2 focus:ring-0 min-h-[40px] max-h-32"
+                        placeholder="Ask a question about this video..." rows="1"></textarea>
+                    <button
+                        class="mb-1 ml-2 w-8 h-8 flex items-center justify-center bg-primary text-on-primary rounded-full hover:brightness-110 transition-all active:scale-95 shrink-0">
+                        <span class="material-symbols-outlined text-base"
+                            style="font-variation-settings: &quot;FILL&quot; 1;">arrow_upward</span>
+                    </button>
+                </div>
+                <div class="flex justify-between items-center px-4">
+
+
+                </div>
+            </div>
+        </div>
+    </aside>
+    <!-- Web SideNavBar -->
+    <nav
+        class="w-[72px] h-screen bg-surface border-l border-outline-variant flex flex-col items-center py-6 gap-4 z-20 shrink-0">
+        <!-- Logo Area (Hidden as per JSON, but leaving space) -->
+        <div class="mb-4 flex flex-col items-center gap-4">
+            <img alt="Mascot" class="w-8 h-8 object-contain"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBf7W0kF8dnu9HbLPO9mdb0wvBoQp2JL1YROfVocmmq2d50eNUC9__rhE7FhQiREZQbjhfAZp2rqIYU_PzBAX4LJSKsj8NE8W0YH0926_rodnyPScl57wyXLDeH_wxSLYlUYf7td1K0r6b0I11ZVpkU9uznYGz7R5cXu2rXXeNxkmXTx5Ecie87Sk3IXoE02tSLXITLaqwSWz0CxPvnR0XZlM5ZmbyilPlh8_TcoSttjOq9J2lcxlPnJMcRMBJohthRNuaHYXAm62E">
+            <div class="w-8 h-px bg-outline-variant"></div>
+        </div>
+        <!-- Tabs -->
+        <div class="flex flex-col space-y-2 gap-4 h-full"><button
+                class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+                <span class="material-symbols-outlined">description</span>
+            </button>
+            <button
+                class="w-12 h-12 rounded-xl flex items-center justify-center bg-primary/10 text-primary hover:bg-primary/20 transition-colors group relative">
+                <span class="material-symbols-outlined"
+                    style="font-variation-settings: &quot;FILL&quot; 1;">forum</span>
+            </button>
+            <button
+                class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+                <span class="material-symbols-outlined">auto_awesome_motion</span>
+            </button>
+            <button
+                class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+                <span class="material-symbols-outlined">settings</span>
+            </button>
+            <div class="flex-1"></div>
+        </div>
+    </nav>
+
+
+</body>
+
+</html>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 400" role="img" aria-labelledby="title desc">
+  <title id="title">Video Summary flat owl mascot logo</title>
+  <desc id="desc">A flat dark owl mascot with a video-player face and summary card.</desc>
+  <defs>
+    <style>
+      .body{fill:#111827;stroke:#27272a;stroke-width:4}
+      .panel{fill:#09090b;stroke:#34d399;stroke-width:4}
+      .eye{fill:#fafafa}.pupil{fill:#09090b}.beak{fill:#a78bfa}
+      .card{fill:#18181b;stroke:#3f3f46;stroke-width:4}
+      .mint{fill:#34d399}.line{fill:#71717a}
+    </style>
+  </defs>
+  <rect class="body" x="36" y="26" width="248" height="344" rx="74"/>
+  <path class="body" d="M56 38 116 78 44 96Z"/>
+  <path class="body" d="M264 38 204 78 276 96Z"/>
+  <rect class="panel" x="50" y="56" width="220" height="108" rx="30" transform="rotate(-3 160 110)"/>
+  <circle class="eye" cx="112" cy="106" r="28"/>
+  <circle class="eye" cx="204" cy="106" r="28"/>
+  <circle class="pupil" cx="112" cy="106" r="12"/>
+  <circle class="pupil" cx="204" cy="106" r="12"/>
+  <path class="beak" d="M160 148 138 116H182Z"/>
+  <rect class="card" x="74" y="212" width="172" height="84" rx="16"/>
+  <rect class="mint" x="104" y="244" width="96" height="10" rx="5"/>
+  <rect class="line" x="104" y="272" width="128" height="9" rx="5"/>
+</svg>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Summary Panel (Narrow)</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Geist+Mono:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface": "#0c0c0f",
+                      "on-surface": "#fafafa",
+                      "surface-container": "#121215",
+                      "error-container": "#3b1111",
+                      "background": "#09090b",
+                      "primary-fixed-dim": "#c4b5fd",
+                      "outline-variant": "#27272a",
+                      "inverse-surface": "#fafafa",
+                      "on-tertiary-fixed": "#003318",
+                      "surface-dim": "#0c0c0f",
+                      "secondary-container": "#27272a",
+                      "secondary": "#71717a",
+                      "surface-tint": "#a78bfa",
+                      "on-tertiary-fixed-variant": "#047857",
+                      "surface-container-lowest": "#09090b",
+                      "on-secondary-container": "#a1a1aa",
+                      "on-secondary-fixed-variant": "#3f3f46",
+                      "on-surface-variant": "#a1a1aa",
+                      "on-tertiary": "#001a12",
+                      "surface-container-high": "#18181b",
+                      "primary-fixed": "#ede9fe",
+                      "on-secondary": "#09090b",
+                      "on-tertiary-container": "#bbf7d0",
+                      "primary-container": "#7c3aed",
+                      "on-primary": "#0a0012",
+                      "on-error-container": "#fca5a5",
+                      "on-primary-container": "#ede9fe",
+                      "primary": "#a78bfa",
+                      "inverse-primary": "#5b21b6",
+                      "tertiary-container": "#065f46",
+                      "on-primary-fixed-variant": "#5b21b6",
+                      "on-error": "#1a0000",
+                      "on-secondary-fixed": "#18181b",
+                      "on-primary-fixed": "#2e1065",
+                      "outline": "#52525b",
+                      "on-background": "#fafafa",
+                      "surface-bright": "#18181b",
+                      "tertiary-fixed": "#bbf7d0",
+                      "inverse-on-surface": "#09090b",
+                      "error": "#ef4444",
+                      "secondary-fixed-dim": "#71717a",
+                      "surface-container-highest": "#1e1e22",
+                      "tertiary": "#34d399",
+                      "secondary-fixed": "#a1a1aa",
+                      "surface-container-low": "#0f0f12",
+                      "tertiary-fixed-dim": "#6ee7b7",
+                      "surface-variant": "#18181b"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {},
+              "fontFamily": {
+                      "headline": ["Geist", "sans-serif"],
+                      "display": ["Geist", "sans-serif"],
+                      "body": ["Geist", "sans-serif"],
+                      "label": ["Geist", "sans-serif"],
+                      "mono": ["Geist Mono", "monospace"]
+              },
+              "fontSize": {}
+      },
+          },
+        }
+      </script>
+<style>body {
+    font-family: "Geist", sans-serif
+    }
+.mono {
+    font-family: "Geist Mono", monospace
+    }
+/* Scrollbar styles for the panel */
+::-webkit-scrollbar {
+    width: 6px
+    }
+::-webkit-scrollbar-track {
+    background: #0c0c0f
+    }
+::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 4px
+    }</style>
+</head>
+<body class="bg-transparent text-on-background min-h-screen relative overflow-hidden flex justify-end">
+<!-- Navigation Shell (TopAppBar - Desktop hidden, visible mobile if needed, but per prompt this is a panel overlay) -->
+<!-- Applying Shared Component: TopAppBar -->
+<div class="hidden md:hidden">
+<!-- Ignored for this specific narrow panel layout as it acts as an overlay/sidebar extension -->
+</div>
+<!-- Main Extension Panel (Narrow Right-Side Panel) -->
+<aside class="w-[420px] h-screen bg-surface-container border-l border-outline-variant flex flex-col shadow-2xl relative z-10 transition-transform duration-300">
+<!-- Header: TopAppBar (Adapted from Shared Component JSON for the Panel Header) -->
+<header class="bg-surface-container dark:bg-surface-container border-b border-outline-variant dark:border-outline-variant flex justify-between items-center px-4 py-3 shrink-0">
+<div class="flex items-center gap-2">
+<h1 class="font-headline font-bold text-on-surface dark:text-on-surface tracking-tighter text-lg">AI Summary</h1>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-xs font-mono font-medium text-tertiary bg-tertiary/10 px-2 py-1 rounded-full border border-tertiary/20">Ready to Summarize</span>
+<button class="text-on-secondary-container hover:text-on-surface hover:bg-surface-container-high transition-colors active:scale-95 duration-100 p-1 rounded-md flex items-center justify-center">
+<span class="material-symbols-outlined text-lg">expand_more</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Content Area -->
+<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+<!-- Video Info Card (Glassmorphism/Bento style) -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-4 flex gap-4 items-start shadow-sm hover:bg-surface-container-high transition-colors">
+<div class="w-24 h-16 bg-surface border border-outline-variant rounded-lg overflow-hidden shrink-0 relative">
+<img alt="Video Thumbnail" class="w-full h-full object-cover opacity-80" data-alt="A sleek, dark-themed technology abstract thumbnail showing glowing purple circuitry against a deep black background. The style is sharp, precise, and developer-oriented, matching the Obsidian dark UI theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxJwgr7NZWOUk0T6Cf15QZoK1FL-y9_zqm0sxllqbpNN_kzeI-l57TbR4yxD-v7fCVI7nZplURgFSnWqoboSrtTSrET7W_tLRgmIdtzoT2uyrUqhBYCSIvVeafNMzsfU49GH1fcZ6C1-aRWkX1hOb_jaTLlL4LWJqd2EhUt2IhB3ynIQJWL6bs4UJVwmw2yxF-OmJg72NyBpkeAvlucYqLQYHwLrJ2Vfnr4HTgziEL3LrGpgAANMnSxLyJDQobD0UcQ9muCKj-gSs"/>
+<div class="absolute bottom-1 right-1 bg-background/80 text-on-surface text-[10px] font-mono px-1 rounded">12:34</div>
+</div>
+<div class="flex flex-col gap-1 min-w-0">
+<h2 class="font-headline font-semibold text-sm text-on-surface truncate">Understanding Large Language Models in 2024</h2>
+<div class="flex items-center gap-2 text-[10px] font-mono text-secondary mt-1">
+</div>
+<div class="flex items-center gap-3 text-[11px] text-secondary mt-0.5">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">account_circle</span>
+<span>AI Research Lab</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span>2 hours ago</span>
+</div>
+</div></div>
+</div>
+<!-- Controls Section: Model & Presets -->
+<div class="flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Configuration</h3>
+<!-- Compact Model Selector (Pill-style) -->
+<div class="flex gap-2"><span class="text-[10px] font-mono font-medium text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded border border-outline-variant flex items-center"><span class="material-symbols-outlined text-[14px] mr-1" style='font-variation-settings: "FILL" 0;'>article</span>gpt-4-turbo</span><span class="text-[10px] font-mono font-medium text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded border border-outline-variant flex items-center"><span class="material-symbols-outlined text-[14px] mr-1" style='font-variation-settings: "FILL" 0;'>image</span>dall-e-3</span></div></div>
+<!-- Prompt Presets -->
+</div>
+<!-- Primary Action -->
+<button class="w-full bg-primary hover:bg-primary-container text-on-primary font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(167,139,250,0.15)] hover:shadow-[0_0_20px_rgba(167,139,250,0.3)]">
+<span class="material-symbols-outlined">auto_awesome</span>
+                Start Summary
+            </button>
+<!-- Divider -->
+<div class="h-px w-full bg-outline-variant relative">
+<span class="absolute left-1/2 -translate-x-1/2 -top-2.5 bg-surface-container px-2 text-xs text-on-surface-variant font-mono">OUTPUT</span>
+</div>
+<!-- Main Body: Placeholder/Result Area -->
+<!-- Using a Bento-style card for the markdown output -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 shadow-inner min-h-[300px] relative"><div aria-hidden="true" class="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden select-none opacity-[0.03]">
+<img alt="" class="w-4/5 h-4/5 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCo4a8ueO84KAchWXJFk28HBlhHR9rFXKR66Yu2E4Esqdw3VQ7HEobvne3REfxcBPmcEN5A7sFdgqAyPEEI1-I7nrezx_A93Swe1f6fNSvfG_pfV4lWbLhgvLrrrjTx4jW2XdzvJICZ9GNWSxUJUti7iw045s3Jie7E_JQu-9sAEsQP84Sfy8DyF7AkWufvMgQQiuTj5OaUe-Zu2-d1NYWqSiHEo48_oFYj-yZxBGFKrJboOYC5i4qRLKrJkVOeN7VPo6EIm9c9508"/>
+</div><button class="absolute top-4 right-4 text-on-secondary-container hover:text-on-surface transition-colors p-1.5 rounded-md hover:bg-surface-container-high flex items-center justify-center" title="Copy">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+<!-- Simulated Generated Markdown Content -->
+<div class="prose prose-invert prose-sm max-w-none">
+<h3 class="text-primary font-headline text-lg font-bold flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-base">flag</span>
+                        #结论
+                    </h3>
+<p class="text-on-surface text-sm leading-relaxed mb-6">
+                        The video comprehensively explains how the latest generation of Large Language Models (LLMs) operate efficiently at scale, emphasizing the shift from sheer parameter size to specialized, optimized architectures like MoE (Mixture of Experts).
+                    </p>
+<h3 class="text-on-surface font-headline text-md font-semibold flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-base text-secondary">list_alt</span>
+                        #具体讲了啥
+                    </h3>
+<ul class="text-on-surface-variant text-sm space-y-2 mb-6 list-disc pl-4">
+<li class="">Evolution from GPT-3 to current efficient models.</li>
+<li class="">Detailed breakdown of <code class="mono text-primary bg-primary/10 px-1 py-0.5 rounded text-[11px]">Attention Mechanisms</code>.</li>
+<li class="">Cost-benefit analysis of running local vs cloud models.</li>
+</ul>
+<h3 class="text-on-surface font-headline text-md font-semibold flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-base text-secondary">key</span>
+                        #关键点
+                    </h3>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="bg-surface-container text-on-surface border border-outline-variant text-xs px-2 py-1 rounded-md font-mono flex items-center"><span class="material-symbols-outlined text-[14px] mr-1" style='font-variation-settings: "FILL" 0;'>article</span>gpt-4-turbo</span>
+<span class="bg-surface-container text-on-surface border border-outline-variant text-xs px-2 py-1 rounded-md font-mono flex items-center"><span class="material-symbols-outlined text-[14px] mr-1" style='font-variation-settings: "FILL" 0;'>image</span>dall-e-3</span>
+<span class="bg-surface-container text-on-surface border border-outline-variant text-xs px-2 py-1 rounded-md font-mono">Inference Cost</span>
+</div>
+<h3 class="text-tertiary font-headline text-md font-semibold flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-base">lightbulb</span>
+                        #对我有什么用
+                    </h3>
+<p class="text-on-surface text-sm leading-relaxed border-l-2 border-tertiary pl-3 py-1 bg-tertiary/5 rounded-r-md">
+                        Provides actionable insights for developers choosing which API to integrate based on latency requirements and budget constraints.
+                    </p>
+</div>
+</div>
+</div>
+<!-- Footer / BottomNavBar (Adapted as a fixed bottom bar within the panel) -->
+</aside>
+<!-- Navigation Rail on the right side -->
+<nav class="w-[72px] h-screen bg-surface border-l border-outline-variant flex flex-col items-center py-6 gap-4 z-20 shrink-0"><div class="w-12 h-12 flex items-center justify-center mb-2"><img alt="Mascot" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBf7W0kF8dnu9HbLPO9mdb0wvBoQp2JL1YROfVocmmq2d50eNUC9__rhE7FhQiREZQbjhfAZp2rqIYU_PzBAX4LJSKsj8NE8W0YH0926_rodnyPScl57wyXLDeH_wxSLYlUYf7td1K0r6b0I11ZVpkU9uznYGz7R5cXu2rXXeNxkmXTx5Ecie87Sk3IXoE02tSLXITLaqwSWz0CxPvnR0XZlM5ZmbyilPlh8_TcoSttjOq9J2lcxlPnJMcRMBJohthRNuaHYXAm62E"/></div><div class="w-8 h-px bg-outline-variant mb-4"></div><button class="w-12 h-12 rounded-xl flex items-center justify-center bg-primary/10 text-primary hover:bg-primary/20 transition-colors group relative">
+<span class="material-symbols-outlined" style='font-variation-settings: "FILL" 1;'>description</span>
+</button>
+<button class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">forum</span>
+</button>
+<button class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">auto_awesome_motion</span>
+</button>
+<button class="w-12 h-12 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="flex-1"></div></nav>
+</body></html>
