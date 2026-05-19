@@ -1,4 +1,5 @@
 import { AppController } from './app/AppController';
+import { isSupportedVideoUrl } from './sources/providers';
 import { Panel } from './ui/panel';
 import { logger } from './utils/logger';
 
@@ -36,7 +37,7 @@ function showBootError(error: unknown): void {
 }
 
 function bootState() {
-  const matched = location.href.includes('bilibili.com/video/') || location.href.includes('bilibili.com/list/');
+  const matched = isSupportedVideoUrl(location.href);
   return {
     href: location.href,
     loadedAt: new Date().toISOString(),
@@ -49,7 +50,7 @@ async function bootstrap(): Promise<void> {
   document.documentElement.setAttribute('data-video-summary-boot', JSON.stringify(window.__VIDEO_SUMMARY_BOOT__));
   console.info('[Video Summary] userscript loaded', window.__VIDEO_SUMMARY_BOOT__);
 
-  if (!location.href.includes('bilibili.com/video/') && !location.href.includes('bilibili.com/list/')) return;
+  if (!isSupportedVideoUrl(location.href)) return;
 
   const controller = new AppController();
   const panel = new Panel(controller);

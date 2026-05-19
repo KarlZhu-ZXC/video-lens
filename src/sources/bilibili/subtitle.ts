@@ -37,7 +37,7 @@ export async function getBilibiliSubtitleOptions(video: VideoInfo): Promise<Subt
 
 async function getSubtitleList(video: VideoInfo): Promise<SubtitleMeta[]> {
   const res = await fetch(
-    `https://api.bilibili.com/x/player/wbi/v2?bvid=${encodeURIComponent(video.bvid)}&cid=${video.cid}`,
+    `https://api.bilibili.com/x/player/wbi/v2?bvid=${encodeURIComponent(video.bvid!)}&cid=${video.cid}`,
     { credentials: 'include' },
   );
   if (!res.ok) throw new Error(`字幕列表请求失败：${res.status}`);

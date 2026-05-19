@@ -14,7 +14,7 @@ export const BUILT_IN_PROMPTS: PromptPreset[] = [
 禁止寒暄、铺垫、自我介绍，不要说“根据字幕”，不要堆专业术语。
 
 视频标题：{{title}}
-UP 主：{{upName}}
+创作者：{{creatorName}}
 视频简介：{{description}}
 原链接：{{url}}
 
@@ -42,7 +42,7 @@ UP 主：{{upName}}
 Explain what this video is saying in plain language. Be direct. Do not say "according to the subtitles" and do not add information that is not supported by the transcript.
 
 Video title: {{title}}
-Creator: {{upName}}
+Creator: {{creatorName}}
 Description: {{description}}
 Original URL: {{url}}
 
@@ -75,7 +75,7 @@ Explain the practical value. If the video is clickbait, shallow, or mostly an ad
     template: `请基于视频字幕内容，生成一份结构清晰的中文学习笔记。
 
 视频标题：{{title}}
-UP 主：{{upName}}
+创作者：{{creatorName}}
 视频简介：{{description}}
 原链接：{{url}}
 
@@ -86,7 +86,7 @@ UP 主：{{upName}}
     enTemplate: `Create a clearly structured English study note based on the video transcript.
 
 Video title: {{title}}
-Creator: {{upName}}
+Creator: {{creatorName}}
 Description: {{description}}
 Original URL: {{url}}
 
@@ -104,7 +104,7 @@ Use Markdown and include: Topic Overview, Outline, Key Concepts, Important Detai
     template: `请以批判性思维审视这个视频。
 
 视频标题：{{title}}
-UP 主：{{upName}}
+创作者：{{creatorName}}
 视频简介：{{description}}
 原链接：{{url}}
 
@@ -115,7 +115,7 @@ UP 主：{{upName}}
     enTemplate: `Review this video with critical thinking.
 
 Video title: {{title}}
-Creator: {{upName}}
+Creator: {{creatorName}}
 Description: {{description}}
 Original URL: {{url}}
 
@@ -133,7 +133,7 @@ Output directly in English: Core Claims, Evidence Assessment, Logical Gaps, Oppo
     template: `请把视频内容整理成一份可执行行动清单。
 
 视频标题：{{title}}
-UP 主：{{upName}}
+创作者：{{creatorName}}
 视频简介：{{description}}
 原链接：{{url}}
 
@@ -144,7 +144,7 @@ UP 主：{{upName}}
     enTemplate: `Turn the video content into an actionable checklist.
 
 Video title: {{title}}
-Creator: {{upName}}
+Creator: {{creatorName}}
 Description: {{description}}
 Original URL: {{url}}
 
@@ -177,7 +177,7 @@ Transcript chunk:
     template: `以下是长视频各段摘要。请合并成一份不重复、结构清晰的中文总结。
 
 视频标题：{{title}}
-UP 主：{{upName}}
+创作者：{{creatorName}}
 原链接：{{url}}
 
 分段摘要：
@@ -185,7 +185,7 @@ UP 主：{{upName}}
     enTemplate: `Below are summaries of chunks from a long video. Merge them into one non-repetitive, clearly structured English summary.
 
 Video title: {{title}}
-Creator: {{upName}}
+Creator: {{creatorName}}
 Original URL: {{url}}
 
 Chunk summaries:
@@ -196,7 +196,7 @@ Chunk summaries:
     name: 'Video Insights',
     type: 'video_insights',
     builtIn: true,
-    template: `你正在回答用户关于一个 Bilibili 视频的问题。请基于摘要和字幕回答，不知道就说不知道。
+    template: `你正在回答用户关于这个视频的问题。请基于摘要和字幕回答，不知道就说不知道。
 
 视频标题：{{title}}
 摘要：
@@ -206,7 +206,7 @@ Chunk summaries:
 {{transcript}}
 
 问题：{{question}}`,
-    enTemplate: `You are answering a user's question about a Bilibili video. Answer in English based on the summary and transcript. If the answer is not supported, say you do not know.
+    enTemplate: `You are answering a user's question about this video. Answer in English based on the summary and transcript. If the answer is not supported, say you do not know.
 
 Video title: {{title}}
 Summary:
@@ -272,7 +272,7 @@ JSON fields: title, subtitle, conclusion, keyPoints[{title,detail}], timeline[{t
 - 只输出最终英文 prompt，不要解释、不要分析、不要 Markdown
 - 120 到 220 个英文单词
 - 必须结合视频标题、结论、关键点和标签里的具体主题，不要泛泛而谈
-- 图片不应包含任何文字、字幕、汉字、logo 或水印
+- 图片不应包含任何文字、字幕、汉字、YouTube logo、Bilibili logo、播放按钮、logo 或水印
 - 只负责生成抽象视觉背景、插画感场景和信息图氛围
 
 {{summary}}`,

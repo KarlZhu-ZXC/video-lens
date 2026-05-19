@@ -6,12 +6,13 @@ export default defineConfig({
     monkey({
       entry: 'src/main.ts',
       userscript: {
-        name: 'Video Summary - Bilibili',
+        name: 'Video Summary',
         namespace: 'https://github.com/yourname/video-summary',
         version: '0.1.0',
-        description: 'Bilibili 视频字幕摘要、Video Insights、一图流总结与 AI 封面图生成',
+        description: 'Bilibili / YouTube 视频字幕摘要、Video Insights、一图流总结与 AI 封面图生成',
         author: 'Karl',
-        match: ['*://*.bilibili.com/*', '*://bilibili.com/*'],
+        match: ['*://*.bilibili.com/*', '*://bilibili.com/*', '*://*.youtube.com/*'],
+        connect: ['youtube.com', 'googlevideo.com', 'youtubei.googleapis.com', 'www.googleapis.com'],
         'run-at': 'document-end',
         noframes: true,
         grant: ['GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'GM_setClipboard'],

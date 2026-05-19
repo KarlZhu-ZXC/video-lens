@@ -25,7 +25,7 @@ export async function runOnePagePipeline(input: OnePagePipelineInput): Promise<O
           role: 'user' as const,
           content: renderPrompt(getPromptTemplate(prompt, config.summary.language), {
             title: summary.video.title,
-            upName: summary.video.upName,
+            upName: summary.video.upName ?? summary.video.creatorName,
             url: summary.video.url,
             summary: summary.content,
           }),
@@ -50,6 +50,12 @@ export async function runOnePagePipeline(input: OnePagePipelineInput): Promise<O
     }
     onProgress?.({ type: 'validating_json' });
     data = parseOnePageJson(result.content);
+    data.source = {
+      ...data.source,
+      title: data.source.title || summary.video.title,
+      upName: data.source.upName ?? summary.video.upName ?? summary.video.creatorName,
+      url: data.source.url || summary.video.url,
+    };
     onePageCache.set(cacheKey, data);
   }
 

@@ -68,13 +68,14 @@ function renderSubtitleSelector(controller: AppController): HTMLElement | string
 }
 
 export function resolveThinkingOpen(isBusy: boolean, userPreferredOpen: boolean | undefined): boolean {
-  return userPreferredOpen ?? isBusy;
+  if (!isBusy) return false;
+  return userPreferredOpen ?? true;
 }
 
 function renderVideoCard(controller: AppController): HTMLElement {
   const video = controller.state.video;
-  const title = video?.title ?? 'Bilibili';
-  const creator = video?.upName ?? 'Bilibili';
+  const title = video?.title ?? 'Video';
+  const creator = video?.creatorName ?? video?.upName ?? video?.platform ?? 'Video';
   const uploaded = formatPublishedAt(video?.publishedAt);
   const duration = formatDuration(video?.duration);
 

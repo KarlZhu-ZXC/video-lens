@@ -2,9 +2,9 @@
 
 ## 目标
 
-`video-summary` 是一个面向 Bilibili 视频页的 Tampermonkey userscript。它在视频页注入 Shadow DOM 面板，读取视频信息和字幕，调用 OpenAI-compatible 文本模型生成摘要、视频洞察问答和一图流数据，并在浏览器端渲染中文信息图。
+`video-summary` 是一个面向 Bilibili 和 YouTube 视频页的 Tampermonkey userscript。它在视频页注入 Shadow DOM 面板，读取视频信息和字幕，调用 OpenAI-compatible 文本模型生成摘要、视频洞察问答和一图流数据，并在浏览器端渲染中文信息图。
 
-当前 V1 聚焦本地可用和快速迭代，不包含登录体系、付费系统、自建云端历史、多平台支持或 Chrome Extension 版本。
+当前 V1 聚焦本地可用和快速迭代，不包含登录体系、付费系统、自建云端历史、YouTube playlist 批量总结或 Chrome Extension 版本。
 
 ## 运行形态
 
@@ -21,32 +21,39 @@ userscript metadata 声明 Tampermonkey grant：
 - `GM_xmlhttpRequest`
 - `GM_setClipboard`
 
-配置优先写入 Tampermonkey storage，避免 API Key 落到 Bilibili 页面 origin 的 `localStorage`。请求通道由系统统一使用 `auto`：流式文本请求优先走浏览器 `fetch`，必要时回退到 GM XHR 的非流式请求；图片请求同样优先使用 fetch，失败时回退 GM XHR。设置页不再暴露请求模式选择。
+配置优先写入 Tampermonkey storage，避免 API Key 落到视频网站页面 origin 的 `localStorage`。请求通道由系统统一使用 `auto`：流式文本请求优先走浏览器 `fetch`，必要时回退到 GM XHR 的非流式请求；图片请求同样优先使用 fetch，失败时回退 GM XHR。设置页不再暴露请求模式选择。
 
 ## 适用页面
 
-脚本由 Tampermonkey 注入到 Bilibili 域名：
+脚本由 Tampermonkey 注入到 Bilibili 和 YouTube 域名：
 
 - `*://*.bilibili.com/*`
 - `*://bilibili.com/*`
+- `*://*.youtube.com/*`
 
 实际 UI 只在以下页面启用：
 
 - `bilibili.com/video/`
 - `bilibili.com/list/`
+- `youtube.com/watch?v=...`
+- `youtube.com/shorts/...`
 
 ## 核心流程
 
 1. 页面加载后执行 `src/main.ts`。
-2. 判断当前 URL 是否为支持的 Bilibili 视频/list 页面。
+2. 判断当前 URL 是否为支持的 Bilibili 或 YouTube 视频页面。
 3. 创建 `AppController` 和 `Panel`。
-4. `BilibiliProvider` 读取视频基本信息和字幕。
-5. 如果用户选择过字幕源，使用该字幕源；否则根据“字幕获取及总结语言”自动选择字幕：中文优先 `zh-CN -> zh -> first`，英文优先 `en -> fallback`。当总结语言变化时，清除旧的自动字幕选择，下一次生成重新按新语言选择。
+4. provider registry 根据 URL 选择 `BilibiliProvider` 或 `YouTubeProvider` 读取视频基本信息和字幕。
+5. 如果用户选择过字幕源，使用该字幕源；否则根据“字幕获取及总结语言”自动选择字幕：中文优先 `zh-CN -> zh -> first`，英文优先 `en -> translated en -> fallback`。YouTube provider 会先读取页面内 caption tracks；没有页面 tracks 时，请求同源 `youtubei/v1/player` 作为不需要 Google API Key 的纯前端 fallback；当总结语言变化时，清除旧的自动字幕选择，下一次生成重新按新语言选择。
 6. 摘要 pipeline 按字幕长度决定直接摘要或分块摘要。
 7. 文本模型以 stream 模式生成内容；长视频分块摘要完成后会在合并阶段继续展示已生成的分段内容，避免可见正文回到空状态。
 8. UI 实时渲染流式摘要、低干扰模型思考状态和 Markdown 正文。
 9. 摘要结果写入本地缓存。
 10. 用户可继续进行视频洞察问答、生成一图流、导出 PNG。
+
+当视频站点在同一个 SPA 页面内切换视频时，URL 变化后页面内的视频数据可能短暂滞后。`AppController.refreshVideo()` 会在检测到当前 URL 已变化但读取到的仍是旧视频 id 时进行短暂重试，避免用户打开另一个视频后面板继续展示上一个视频。
+
+YouTube 字幕读取的边界：当前实现只读取 YouTube 已向页面或 youtubei player 响应暴露的人工字幕、自动字幕和可翻译字幕。若视频没有这些字幕轨道，userscript 不会凭空生成转录文本；后续如需覆盖无字幕视频，需要接入 ASR，建议参考 `ASR_INTEGRATION_RESEARCH.md`。
 
 ## 文本模型
 
@@ -134,18 +141,20 @@ UI 使用 `streamingSummary` 临时状态持续刷新。生成完成后写入 `s
 
 ## 本地存储
 
-配置优先保存在 Tampermonkey storage。摘要、一图流和图片结果保存在浏览器本地缓存中。摘要缓存 key 包含视频 id、prompt id 和文本模型，避免不同模型/提示词结果互相覆盖。
+配置优先保存在 Tampermonkey storage。摘要、一图流和图片结果保存在浏览器本地缓存中。摘要缓存 key 包含平台、视频 id、prompt id、文本模型、字幕/总结语言和字幕源，避免不同平台、模型、提示词或字幕结果互相覆盖。
 
 摘要页会显示当前字幕语言、摘要生成时间和模型配置。加载到多个字幕源后，摘要页显示字幕源选择器；重新生成摘要时使用用户选择的字幕源。用户可以清除此视频的摘要缓存，也可以清空摘要、一图流和图片缓存。
 
 ## UI 行为
 
-- 面板挂载在 Shadow DOM 中，减少与 Bilibili 页面样式冲突。
+- 面板挂载在 Shadow DOM 中，减少与视频网站页面样式冲突。
 - 面板支持左/右位置配置，所有 Tab 共用一个面板宽度。宽度通过面板侧边 resize handle 调整并写入配置，拖拽范围为 `300px` 到 `900px`，拖拽保存不显示 `设置已保存` toast。
 - 默认以可拖动悬浮 mascot 按钮启动，点击后展开完整面板。
 - 面板支持临时收起；折叠状态不持久化，刷新后仍从悬浮按钮开始。
 - 摘要和一图流的主操作按钮使用底部吸底操作区，和设置页保存按钮保持一致。
-- 设置页语言 section 包含界面显示语言和字幕获取及总结语言。字幕/总结语言为英文时，Bilibili 字幕优先尝试英文字幕，摘要、长视频分块/合并、视频洞察和一图流 JSON 使用英文 prompt。
+- 设置页语言 section 包含界面显示语言和字幕获取及总结语言。字幕/总结语言为英文时，字幕源优先尝试英文字幕；YouTube 没有英文但原字幕可翻译时，会优先使用 `tlang=en` 翻译字幕。摘要、长视频分块/合并、视频洞察和一图流 JSON 使用对应语言 prompt。
+- 设置页视频源 section 提供 YouTube 字幕策略：`auto` 默认先读页面内字幕，配置了官方 API 后可作为备用；`page` 只用页面字幕；`official` 优先官方 API 能力。
+- 设置页表单有未保存更改时，切换到其他 Tab 会弹出确认框；确认后先保存配置再离开，取消则停留在设置页。
 - 设置页文本模型和生图模型 section header 右侧提供 `连通性测试`。按钮 tooltip 会提示会实际发送轻量 API 请求；成功或失败都会通过全局 toast 反馈。
 - 设置页不再提供文本/图片请求模式、生图模型启用开关或面板宽度下拉；请求模式固定为自动，生图模型默认启用。
 - 全局顶部通知独立于 Tab 内容渲染，切换 Tab 不会重启未结束的通知动画。
@@ -165,6 +174,8 @@ UI 使用 `streamingSummary` 临时状态持续刷新。生成完成后写入 `s
 - 自动请求模式中的 fetch 通道要求 AI API 支持浏览器 CORS。
 - 自动请求模式回退到 GM XHR 后可绕过浏览器 CORS，但无法提供真正的流式渲染。
 - API Key 仍然保存在本机 Tampermonkey storage，不提供账号级加密、同步或远程密钥托管。
-- 当前只支持 Bilibili。
+- 当前支持 Bilibili 视频/list 页面和 YouTube watch/shorts 页面；不支持 youtu.be、embed 或 playlist 批量总结入口。
+- YouTube 页面内字幕结构不是官方公共 API，YouTube 改版时可能失效；保留官方 API 配置作为备用元数据路径。
+- YouTube XML timedtext 字幕使用字符串解析，避免 YouTube 页面 Trusted Types 限制下 `DOMParser.parseFromString` 被拦截。
 - 当前没有云端账号、同步历史或支付体系。
 - Markdown 渲染器是安全子集，不支持完整 CommonMark。

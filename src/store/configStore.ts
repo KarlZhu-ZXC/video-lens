@@ -3,7 +3,10 @@ import { CONFIG_KEY, type LocalConfig } from './types';
 
 export const DEFAULT_CONFIG: LocalConfig = {
   schemaVersion: 1,
-  source: { enabledSources: ['bilibili'] },
+  source: {
+    enabledSources: ['bilibili', 'youtube'],
+    youtube: { captionStrategy: 'auto', apiKey: '', oauthAccessToken: '' },
+  },
   providerMode: 'direct',
   textAi: {
     provider: 'minimax',
@@ -79,6 +82,15 @@ export function loadConfig(): LocalConfig {
   const config = mergeConfig(DEFAULT_CONFIG, typeof GM_getValue === 'function' ? parsed : stripSensitiveConfigForStorage(parsed));
   return {
     ...config,
+    source: {
+      ...config.source,
+      enabledSources: config.source.enabledSources ?? ['bilibili', 'youtube'],
+      youtube: {
+        captionStrategy: config.source.youtube?.captionStrategy ?? 'auto',
+        apiKey: config.source.youtube?.apiKey ?? '',
+        oauthAccessToken: config.source.youtube?.oauthAccessToken ?? '',
+      },
+    },
     textAi: { ...config.textAi, requestMode: 'auto' },
     imageAi: { ...config.imageAi, enabled: true, requestMode: 'auto' },
     ui: { ...config.ui, collapsed: true },
@@ -94,6 +106,14 @@ export function saveConfig(config: LocalConfig): void {
 export function stripSensitiveConfigForStorage(config: LocalConfig): LocalConfig {
   return {
     ...config,
+    source: {
+      ...config.source,
+      youtube: {
+        captionStrategy: config.source.youtube?.captionStrategy ?? 'auto',
+        apiKey: '',
+        oauthAccessToken: '',
+      },
+    },
     textAi: { ...config.textAi, apiKey: '' },
     imageAi: { ...config.imageAi, apiKey: '' },
   };

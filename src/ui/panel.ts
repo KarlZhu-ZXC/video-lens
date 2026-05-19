@@ -19,8 +19,11 @@ export class Panel {
   private activeTab: TabId;
   private thinkingOpen: boolean | undefined;
   private summaryOutputSticksToBottom = true;
+  private summaryOutputScrollTop = 0;
   private videoInsightsChatSticksToBottom = true;
   private videoInsightsChatScrollTop = 0;
+  private settingsDirty = false;
+  private saveSettingsBeforeLeave?: () => boolean;
 
   constructor(private readonly controller: AppController) {
     this.activeTab = controller.config.ui.defaultTab;
@@ -149,6 +152,8 @@ export class Panel {
             el('em', {}, [label]),
           ]);
           tab.addEventListener('click', () => {
+            if (this.activeTab === id) return;
+            if (!this.canLeaveActiveTab()) return;
             this.activeTab = id;
             this.render();
           });
@@ -214,7 +219,16 @@ export class Panel {
   private renderActiveTab(): HTMLElement {
     if (this.activeTab === 'videoInsights') return renderVideoInsightsView(this.controller);
     if (this.activeTab === 'oneImage') return renderOneImageView(this.controller);
-    if (this.activeTab === 'settings') return renderSettingsView(this.controller);
+    if (this.activeTab === 'settings') {
+      return renderSettingsView(this.controller, {
+        onDirtyChange: (dirty) => {
+          this.settingsDirty = dirty;
+        },
+        registerSave: (save) => {
+          this.saveSettingsBeforeLeave = save;
+        },
+      });
+    }
     return renderSummaryView(this.controller, {
       thinkingOpen: this.thinkingOpen,
       onThinkingToggle: (open) => {
@@ -227,6 +241,20 @@ export class Panel {
     const button = el('button', { class: 'icon', title: label, 'aria-label': label }, [panelIcon('collapse')]);
     button.addEventListener('click', onClick);
     return button;
+  }
+
+  private canLeaveActiveTab(): boolean {
+    if (this.activeTab !== 'settings') return true;
+    const canLeave = shouldLeaveSettingsTab(
+      this.settingsDirty,
+      () => window.confirm('设置尚未保存，是否保存更改？'),
+      this.saveSettingsBeforeLeave,
+    );
+    if (canLeave) {
+      this.settingsDirty = false;
+      this.saveSettingsBeforeLeave = undefined;
+    }
+    return canLeave;
   }
 
   private bindLauncherDrag(launcher: HTMLElement): void {
@@ -291,6 +319,7 @@ export class Panel {
       }
       const distanceFromBottom = output.scrollHeight - output.scrollTop - output.clientHeight;
       this.summaryOutputSticksToBottom = distanceFromBottom < 96;
+      this.summaryOutputScrollTop = output.scrollTop;
     }
     if (this.activeTab === 'videoInsights') {
       const chat = this.root.querySelector('.vs-chat');
@@ -306,11 +335,15 @@ export class Panel {
   }
 
   private restoreSummaryScroll(): void {
-    if (this.activeTab !== 'summary' || !this.summaryOutputSticksToBottom) return;
+    if (this.activeTab !== 'summary') return;
     const output = this.root.querySelector('.vs-output-content');
     if (!output) return;
     requestAnimationFrame(() => {
-      output.scrollTop = output.scrollHeight;
+      output.scrollTop = resolveSummaryScrollTop(
+        this.summaryOutputSticksToBottom,
+        this.summaryOutputScrollTop,
+        output.scrollHeight,
+      );
     });
   }
 
@@ -339,6 +372,20 @@ export function clampLauncherPosition(x: number, y: number, launcher: HTMLElemen
 
 export function clampPanelWidth(width: number): number {
   return Math.round(Math.min(900, Math.max(300, width)));
+}
+
+export function resolveSummaryScrollTop(sticksToBottom: boolean, previousScrollTop: number, scrollHeight: number): number {
+  return sticksToBottom ? scrollHeight : previousScrollTop;
+}
+
+export function shouldLeaveSettingsTab(
+  dirty: boolean,
+  confirmSave: () => boolean,
+  save?: () => boolean,
+): boolean {
+  if (!dirty) return true;
+  if (!confirmSave()) return false;
+  return save ? save() : true;
 }
 
 type PanelIconName = TabId | 'collapse';

@@ -616,6 +616,11 @@ textarea::-webkit-scrollbar-thumb,
   padding-right: 4px;
 }
 
+.vs-summary-scroll {
+  display: flex;
+  flex-direction: column;
+}
+
 .vs-one-image-scroll {
   grid-template-rows: auto auto auto minmax(0, 1fr);
 }
@@ -933,6 +938,7 @@ textarea::-webkit-scrollbar-thumb,
 }
 
 .vs-output {
+  flex: 1 1 auto;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: visible;

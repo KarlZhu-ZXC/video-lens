@@ -107,7 +107,9 @@ async function ask(
 ): Promise<{ content: string; reasoning?: string }> {
   const prompt = renderPrompt(template, {
     title: params.video.title,
-    upName: params.video.upName,
+    creatorName: params.video.creatorName ?? params.video.upName,
+    upName: params.video.upName ?? params.video.creatorName,
+    platform: params.video.platform ?? params.video.source,
     description: params.video.description,
     url: params.video.url,
     transcript: params.transcriptText,

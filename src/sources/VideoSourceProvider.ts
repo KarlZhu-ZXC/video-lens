@@ -1,10 +1,12 @@
 export interface VideoInfo {
-  source: 'bilibili';
+  source: VideoSource;
   sourceId: string;
-  bvid: string;
+  platform?: string;
+  bvid?: string;
   aid?: number;
-  cid: number;
+  cid?: number;
   title: string;
+  creatorName?: string;
   upName?: string;
   description?: string;
   duration?: number;
@@ -12,6 +14,8 @@ export interface VideoInfo {
   publishedAt?: number;
   url: string;
 }
+
+export type VideoSource = 'bilibili' | 'youtube';
 
 export interface SubtitleLine {
   from: number;

@@ -16,6 +16,9 @@ export async function askVideoInsight(
   const promptPreset = getPromptById('video_insights_default')!;
   const prompt = renderPrompt(getPromptTemplate(promptPreset, config.summary.language), {
     title: summary.video.title,
+    creatorName: summary.video.creatorName ?? summary.video.upName,
+    upName: summary.video.upName ?? summary.video.creatorName,
+    platform: summary.video.platform ?? summary.video.source,
     summary: summary.content,
     transcript: summary.transcript.plainText,
     question,

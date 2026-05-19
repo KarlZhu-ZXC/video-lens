@@ -7,7 +7,14 @@ export const IMAGE_CACHE_KEY = 'video_summary_image_cache_v1';
 
 export interface LocalConfig {
   schemaVersion: 1;
-  source: { enabledSources: ['bilibili'] };
+  source: {
+    enabledSources: Array<'bilibili' | 'youtube'>;
+    youtube?: {
+      captionStrategy: 'auto' | 'page' | 'official';
+      apiKey?: string;
+      oauthAccessToken?: string;
+    };
+  };
   providerMode: 'direct' | 'remote';
   textAi: {
     provider?: 'minimax' | 'deepseek' | 'custom';

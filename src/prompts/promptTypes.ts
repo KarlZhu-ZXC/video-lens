@@ -20,7 +20,9 @@ export interface PromptPreset {
 
 export interface PromptVariables {
   title?: string;
+  creatorName?: string;
   upName?: string;
+  platform?: string;
   description?: string;
   url?: string;
   transcript?: string;

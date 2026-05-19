@@ -13,7 +13,12 @@ import { createUiText, type UiLanguage } from './i18n';
 export const CONNECTION_TEST_LABEL = '连通性测试';
 const CONNECTION_TEST_TOOLTIP = '会实际发送一次轻量 API 请求，用于检查连通性，可能产生极少量 token 或图片调用消耗。';
 
-export function renderSettingsView(controller: AppController): HTMLElement {
+export interface SettingsViewOptions {
+  onDirtyChange?: (dirty: boolean) => void;
+  registerSave?: (save: () => boolean) => void;
+}
+
+export function renderSettingsView(controller: AppController, options: SettingsViewOptions = {}): HTMLElement {
   const config = controller.config;
   const t = createUiText(config.ui.language);
   const textProvider = getTextProvider(config.textAi.provider);
@@ -26,6 +31,16 @@ export function renderSettingsView(controller: AppController): HTMLElement {
     ['zh-CN', t('settings.languageZh')],
     ['en-US', t('settings.languageEn')],
   ]);
+  const youtubeConfig = config.source.youtube ?? { captionStrategy: 'auto', apiKey: '', oauthAccessToken: '' };
+  const youtubeCaptionStrategy = selectInput(youtubeConfig.captionStrategy, [
+    ['auto', t('settings.youtubeStrategyAuto')],
+    ['page', t('settings.youtubeStrategyPage')],
+    ['official', t('settings.youtubeStrategyOfficial')],
+  ]);
+  const youtubeApiSecretInput = resolveSecretInput(youtubeConfig.apiKey ?? '');
+  const youtubeApiKey = textInput(youtubeApiSecretInput.value, youtubeApiSecretInput.placeholder, 'password');
+  const youtubeOauthSecretInput = resolveSecretInput(youtubeConfig.oauthAccessToken ?? '');
+  const youtubeOauthToken = textInput(youtubeOauthSecretInput.value, youtubeOauthSecretInput.placeholder, 'password');
   const textSecretInput = resolveSecretInput(config.textAi.apiKey);
   const textKey = textInput(textSecretInput.value, textSecretInput.placeholder, 'password');
   const textModel = textInput(config.textAi.model, 'model-name');
@@ -48,6 +63,26 @@ export function renderSettingsView(controller: AppController): HTMLElement {
   const validation = el('div', { class: 'vs-settings-validation', role: 'alert', hidden: true });
   syncImageFields();
   mode.addEventListener('change', syncImageFields);
+  const controls = [
+    languageSelect,
+    summaryLanguageSelect,
+    youtubeCaptionStrategy,
+    youtubeApiKey,
+    youtubeOauthToken,
+    providerSelect,
+    textModel,
+    textBaseUrl,
+    textKey,
+    imageKey,
+    imageApi,
+    imageModel,
+    mode,
+  ];
+  controls.forEach((control) => {
+    control.addEventListener('input', notifyDirty);
+    control.addEventListener('change', notifyDirty);
+  });
+  options.registerSave?.(saveSettings);
 
   return el('div', { class: 'vs-settings-layout' }, [
     el('div', { class: 'vs-settings-scroll' }, [
@@ -55,6 +90,12 @@ export function renderSettingsView(controller: AppController): HTMLElement {
         el('h3', {}, [t('settings.languageGroup')]),
         field(t('settings.language'), languageSelect),
         field(t('settings.summaryLanguage'), summaryLanguageSelect),
+      ]),
+      el('section', { class: 'vs-settings-group' }, [
+        el('h3', {}, [t('settings.sourceGroup')]),
+        field(t('settings.youtubeCaptionStrategy'), youtubeCaptionStrategy),
+        field(t('settings.youtubeApiKey'), youtubeApiKey),
+        field(t('settings.youtubeOauthToken'), youtubeOauthToken),
       ]),
       el('section', { class: 'vs-settings-group' }, [
         settingsHeader(t('settings.textGroup'), () => controller.testTextConnection()),
@@ -79,34 +120,7 @@ export function renderSettingsView(controller: AppController): HTMLElement {
       actionButton(
         t('actions.saveSettings'),
         () => {
-          const error = validateSettings();
-          if (error) {
-            validation.textContent = error;
-            validation.hidden = false;
-            return;
-          }
-          validation.hidden = true;
-          controller.updateConfig({
-            ui: { ...config.ui, language: languageSelect.value as UiLanguage },
-            summary: { ...config.summary, language: summaryLanguageSelect.value as typeof config.summary.language },
-            textAi: applyTextProviderConfig(config.textAi, {
-              providerId: providerSelect.value as TextProviderId,
-              baseUrl: textBaseUrl.value,
-              apiKey: resolveSecretValueForSave(config.textAi.apiKey, textKey.value),
-              model: textModel.value,
-              requestMode: 'auto',
-            }),
-            imageAi: {
-              ...config.imageAi,
-              enabled: true,
-              apiUrl: imageApi.value,
-              apiKey: resolveSecretValueForSave(config.imageAi.apiKey, imageKey.value),
-              model: imageModel.value,
-              requestMode: 'auto',
-            },
-            onePage: { ...config.onePage, mode: mode.value as typeof config.onePage.mode },
-            oneImage: { ...config.oneImage, mode: mode.value as typeof config.oneImage.mode },
-          });
+          saveSettings();
         },
         true,
         { disabled: controller.state.busy },
@@ -117,6 +131,11 @@ export function renderSettingsView(controller: AppController): HTMLElement {
   function resetSettingsForm(): void {
     languageSelect.value = config.ui.language;
     summaryLanguageSelect.value = config.summary.language;
+    youtubeCaptionStrategy.value = youtubeConfig.captionStrategy;
+    youtubeApiKey.value = '';
+    youtubeApiKey.placeholder = resolveSecretInput(youtubeConfig.apiKey ?? '').placeholder;
+    youtubeOauthToken.value = '';
+    youtubeOauthToken.placeholder = resolveSecretInput(youtubeConfig.oauthAccessToken ?? '').placeholder;
     providerSelect.value = textProvider.id;
     textModel.value = config.textAi.model;
     textBaseUrl.value = config.textAi.apiUrl || textProvider.defaultBaseUrl;
@@ -128,6 +147,49 @@ export function renderSettingsView(controller: AppController): HTMLElement {
     imageModel.value = config.imageAi.model;
     mode.value = config.oneImage.mode;
     syncImageFields();
+    notifyDirty();
+  }
+
+  function saveSettings(): boolean {
+    const error = validateSettings();
+    if (error) {
+      validation.textContent = error;
+      validation.hidden = false;
+      return false;
+    }
+    validation.hidden = true;
+    controller.updateConfig({
+      ui: { ...config.ui, language: languageSelect.value as UiLanguage },
+      source: {
+        ...config.source,
+        enabledSources: ['bilibili', 'youtube'],
+        youtube: {
+          captionStrategy: youtubeCaptionStrategy.value as 'auto' | 'page' | 'official',
+          apiKey: resolveSecretValueForSave(youtubeConfig.apiKey ?? '', youtubeApiKey.value),
+          oauthAccessToken: resolveSecretValueForSave(youtubeConfig.oauthAccessToken ?? '', youtubeOauthToken.value),
+        },
+      },
+      summary: { ...config.summary, language: summaryLanguageSelect.value as typeof config.summary.language },
+      textAi: applyTextProviderConfig(config.textAi, {
+        providerId: providerSelect.value as TextProviderId,
+        baseUrl: textBaseUrl.value,
+        apiKey: resolveSecretValueForSave(config.textAi.apiKey, textKey.value),
+        model: textModel.value,
+        requestMode: 'auto',
+      }),
+      imageAi: {
+        ...config.imageAi,
+        enabled: true,
+        apiUrl: imageApi.value,
+        apiKey: resolveSecretValueForSave(config.imageAi.apiKey, imageKey.value),
+        model: imageModel.value,
+        requestMode: 'auto',
+      },
+      onePage: { ...config.onePage, mode: mode.value as typeof config.onePage.mode },
+      oneImage: { ...config.oneImage, mode: mode.value as typeof config.oneImage.mode },
+    });
+    options.onDirtyChange?.(false);
+    return true;
   }
 
   function validateSettings(): string {
@@ -147,6 +209,28 @@ export function renderSettingsView(controller: AppController): HTMLElement {
     [imageKey, imageApi, imageModel].forEach((control) => {
       control.disabled = disabled;
     });
+  }
+
+  function notifyDirty(): void {
+    options.onDirtyChange?.(isSettingsDirty());
+  }
+
+  function isSettingsDirty(): boolean {
+    return (
+      languageSelect.value !== config.ui.language ||
+      summaryLanguageSelect.value !== config.summary.language ||
+      youtubeCaptionStrategy.value !== youtubeConfig.captionStrategy ||
+      youtubeApiKey.value.trim() !== '' ||
+      youtubeOauthToken.value.trim() !== '' ||
+      providerSelect.value !== textProvider.id ||
+      textModel.value !== config.textAi.model ||
+      textBaseUrl.value !== (config.textAi.apiUrl || textProvider.defaultBaseUrl) ||
+      textKey.value.trim() !== '' ||
+      imageKey.value.trim() !== '' ||
+      imageApi.value !== config.imageAi.apiUrl ||
+      imageModel.value !== config.imageAi.model ||
+      mode.value !== config.oneImage.mode
+    );
   }
 }
 

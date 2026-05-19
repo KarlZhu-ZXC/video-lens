@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { chunkText } from '../src/ai/chunking';
 import { normalizeImageResponseFormat, parseGeneratedImage, sanitizeImagePrompt } from '../src/ai/image/DirectOpenAIImageClient';
 import { normalizeChatCompletionsUrl } from '../src/ai/text/DirectOpenAITextClient';
@@ -34,7 +34,8 @@ import { estimateSummaryMaxTokens, runSummaryPipeline } from '../src/summary/sum
 import { extractThinkBlocks } from '../src/summary/think';
 import { getStatusText, getUiText } from '../src/ui/i18n';
 import { resolveOneImageStatus } from '../src/ui/oneImageView';
-import { clampPanelWidth, panelIconPaths } from '../src/ui/panel';
+import { clampPanelWidth, panelIconPaths, resolveSummaryScrollTop } from '../src/ui/panel';
+import { shouldLeaveSettingsTab } from '../src/ui/panel';
 import { formatTranscriptLanguage, resolveThinkingOpen } from '../src/ui/summaryView';
 import { isVideoSummaryHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
 import { CONNECTION_TEST_LABEL, resolveSecretInput, resolveSecretValueForSave } from '../src/ui/settingsModal';
@@ -42,12 +43,31 @@ import { normalizeAssetUrl } from '../src/utils/url';
 import { resolveThinkingPresentation } from '../src/ui/aiResponse';
 import { DEV_HARNESS_COMMAND, HARNESS_ENTRY_SCRIPT } from '../src/harness/constants';
 import { PANEL_STYLES } from '../src/ui/styles';
+import { getActiveProvider, isSupportedVideoUrl } from '../src/sources/providers';
+import { extractYoutubeVideoId, parseYoutubePlayerResponse } from '../src/sources/youtube/videoInfo';
+import {
+  buildTargetLanguageTranslatedTracks,
+  getYoutubeSubtitleOptions,
+  getYoutubeTranscript,
+  parseYoutubeJson3Transcript,
+  parseYoutubeXmlTranscript,
+  selectYoutubeCaptionTrack,
+} from '../src/sources/youtube/subtitle';
 
 describe('renderPrompt', () => {
   it('replaces known variables and leaves missing variables empty', () => {
     expect(renderPrompt('标题：{{title}} 作者：{{upName}} 空：{{missing}}', { title: '测试视频' })).toBe(
       '标题：测试视频 作者： 空：',
     );
+  });
+
+  it('supports platform-neutral creator variables while preserving upName compatibility', () => {
+    expect(
+      renderPrompt('创作者：{{creatorName}} / {{upName}} 平台：{{platform}}', {
+        creatorName: 'Karl',
+        platform: 'YouTube',
+      }),
+    ).toBe('创作者：Karl / Karl 平台：YouTube');
   });
 
   it('provides English templates for all built-in text generation prompts used by summary flows', () => {
@@ -132,6 +152,261 @@ describe('long summary streaming', () => {
   });
 });
 
+describe('video source providers', () => {
+  it('selects the right provider for Bilibili and YouTube video URLs', () => {
+    expect(getActiveProvider('https://www.bilibili.com/video/BV1xx').name).toBe('bilibili');
+    expect(getActiveProvider('https://www.youtube.com/watch?v=dQw4w9WgXcQ').name).toBe('youtube');
+    expect(getActiveProvider('https://www.youtube.com/shorts/abc123xyz90').name).toBe('youtube');
+    expect(isSupportedVideoUrl('https://www.youtube.com/feed/subscriptions')).toBe(false);
+  });
+});
+
+describe('YouTube source parsing', () => {
+  it('extracts watch and shorts video ids', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/abc123xyz90')).toBe('abc123xyz90');
+    expect(extractYoutubeVideoId('https://www.youtube.com/feed/subscriptions')).toBeUndefined();
+  });
+
+  it('parses player response metadata and caption tracks', () => {
+    const parsed = parseYoutubePlayerResponse(
+      {
+        videoDetails: {
+          videoId: 'yt-1',
+          title: 'YouTube Title',
+          author: 'Creator Name',
+          shortDescription: 'Description',
+          lengthSeconds: '123',
+          thumbnail: { thumbnails: [{ url: 'small.jpg' }, { url: 'large.jpg' }] },
+        },
+        microformat: {
+          playerMicroformatRenderer: {
+            publishDate: '2024-01-02',
+          },
+        },
+        captions: {
+          playerCaptionsTracklistRenderer: {
+            captionTracks: [
+              { baseUrl: 'https://caption.example/en', languageCode: 'en', name: { simpleText: 'English' } },
+              {
+                baseUrl: 'https://caption.example/zh',
+                languageCode: 'zh-Hans',
+                kind: 'asr',
+                name: { runs: [{ text: 'Chinese' }] },
+                isTranslatable: true,
+              },
+            ],
+          },
+        },
+      },
+      'https://www.youtube.com/watch?v=yt-1',
+    );
+
+    expect(parsed.video.source).toBe('youtube');
+    expect(parsed.video.sourceId).toBe('yt-1');
+    expect(parsed.video.creatorName).toBe('Creator Name');
+    expect(parsed.video.duration).toBe(123);
+    expect(parsed.video.coverUrl).toBe('large.jpg');
+    expect(parsed.tracks.map((track) => track.id)).toEqual(['en', 'zh-Hans']);
+    expect(parsed.tracks[1].label).toBe('Chinese (auto)');
+  });
+
+  it('parses JSON3 captions into timestamped transcript lines', () => {
+    const transcript = parseYoutubeJson3Transcript(
+      {
+        events: [
+          { tStartMs: 0, dDurationMs: 1500, segs: [{ utf8: 'Hello' }, { utf8: ' world' }] },
+          { tStartMs: 2000, dDurationMs: 1000, segs: [{ utf8: '\n' }] },
+          { tStartMs: 62000, dDurationMs: 2000, segs: [{ utf8: 'Next line' }] },
+        ],
+      },
+      { id: 'en', label: 'English', languageCode: 'en', baseUrl: 'https://caption.example/en' },
+    );
+
+    expect(transcript.language).toBe('English');
+    expect(transcript.languageCode).toBe('en');
+    expect(transcript.lines).toHaveLength(2);
+    expect(transcript.plainText).toContain('[00:00] Hello world');
+    expect(transcript.plainText).toContain('[01:02] Next line');
+  });
+
+  it('parses XML captions without DOMParser for Trusted Types restricted pages', () => {
+    const originalDomParser = (globalThis as any).DOMParser;
+    Object.defineProperty(globalThis, 'DOMParser', {
+      configurable: true,
+      value: class BlockedDomParser {
+        parseFromString() {
+          throw new TypeError("This document requires 'TrustedHTML' assignment.");
+        }
+      },
+    });
+
+    const transcript = parseYoutubeXmlTranscript(
+      '<transcript><text start="0" dur="1.5">Hello &amp; welcome</text><text start="62" dur="2">Next line</text></transcript>',
+      { id: 'en', label: 'English', languageCode: 'en', baseUrl: 'https://caption.example/en' },
+    );
+
+    expect(transcript.plainText).toContain('[00:00] Hello & welcome');
+    expect(transcript.plainText).toContain('[01:02] Next line');
+    Object.defineProperty(globalThis, 'DOMParser', { configurable: true, value: originalDomParser });
+  });
+
+  it('prefers English captions, translated English captions, then fallback captions', () => {
+    const tracks = [
+      {
+        id: 'zh-Hans',
+        label: 'Chinese',
+        languageCode: 'zh-Hans',
+        baseUrl: 'https://caption.example/zh',
+        isTranslatable: true,
+      },
+      { id: 'ja', label: 'Japanese', languageCode: 'ja', baseUrl: 'https://caption.example/ja' },
+    ];
+
+    expect(selectYoutubeCaptionTrack(tracks, undefined, 'en-US')?.id).toBe('zh-Hans::tlang=en');
+    expect(selectYoutubeCaptionTrack(tracks, undefined, 'zh-CN')?.id).toBe('zh-Hans');
+    expect(selectYoutubeCaptionTrack(tracks, 'ja', 'en-US')?.id).toBe('ja');
+  });
+
+  it('builds target-language translated subtitle options for translatable tracks', () => {
+    const translated = buildTargetLanguageTranslatedTracks(
+      [
+        {
+          id: 'zh-Hans',
+          label: 'Chinese (auto)',
+          languageCode: 'zh-Hans',
+          baseUrl: 'https://caption.example/zh?x=1',
+          isTranslatable: true,
+        },
+        { id: 'en', label: 'English', languageCode: 'en', baseUrl: 'https://caption.example/en' },
+      ],
+      'en-US',
+    );
+
+    expect(translated).toHaveLength(1);
+    expect(translated[0].id).toBe('zh-Hans::tlang=en');
+    expect(translated[0].label).toBe('English (translated from Chinese)');
+    expect(translated[0].baseUrl).toContain('tlang=en');
+  });
+
+  it('falls back to youtubei player captions when page captions are unavailable', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalLocation = globalThis.location;
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { origin: 'https://www.youtube.com', href: 'https://www.youtube.com/watch?v=yt-fallback' },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { ytcfg: { get: (key: string) => (key === 'INNERTUBE_API_KEY' ? 'test-key' : undefined) } },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { scripts: [], querySelector: () => undefined, title: 'Fallback - YouTube' },
+    });
+    globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toContain('/youtubei/v1/player');
+      expect(String(url)).toContain('key=test-key');
+      expect(JSON.parse(String(init?.body)).videoId).toBe('yt-fallback');
+      return new Response(
+        JSON.stringify({
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [
+                {
+                  baseUrl: 'https://caption.example/en',
+                  languageCode: 'en',
+                  name: { simpleText: 'English' },
+                },
+              ],
+            },
+          },
+        }),
+        { status: 200 },
+      );
+    }) as any;
+
+    const options = await getYoutubeSubtitleOptions(
+      {
+        source: 'youtube',
+        sourceId: 'yt-fallback',
+        title: 'Fallback',
+        url: 'https://www.youtube.com/watch?v=yt-fallback',
+      },
+      DEFAULT_CONFIG,
+    );
+
+    expect(options).toEqual([{ id: 'en', label: 'English' }]);
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  });
+
+  it('uses youtubei fallback captions when reading a transcript', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalLocation = globalThis.location;
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { origin: 'https://www.youtube.com', href: 'https://www.youtube.com/watch?v=yt-transcript' },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { ytcfg: { get: () => undefined } },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { scripts: [], querySelector: () => undefined, title: 'Transcript - YouTube' },
+    });
+    globalThis.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).includes('/youtubei/v1/player')) {
+        return new Response(
+          JSON.stringify({
+            captions: {
+              playerCaptionsTracklistRenderer: {
+                captionTracks: [
+                  {
+                    baseUrl: 'https://caption.example/en',
+                    languageCode: 'en',
+                    name: { simpleText: 'English' },
+                  },
+                ],
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      expect(String(url)).toContain('fmt=json3');
+      return new Response(JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'From youtubei' }] }] }), {
+        status: 200,
+      });
+    }) as any;
+
+    const transcript = await getYoutubeTranscript(
+      {
+        source: 'youtube',
+        sourceId: 'yt-transcript',
+        title: 'Transcript',
+        url: 'https://www.youtube.com/watch?v=yt-transcript',
+      },
+      undefined,
+      'en-US',
+      DEFAULT_CONFIG,
+    );
+
+    expect(transcript.plainText).toContain('From youtubei');
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  });
+});
+
 describe('extractThinkBlocks', () => {
   it('moves think tags out of visible content', () => {
     expect(extractThinkBlocks('<think>推理过程</think># 结论')).toEqual({
@@ -158,6 +433,10 @@ describe('summary thinking panel', () => {
     expect(resolveThinkingOpen(true, undefined)).toBe(true);
   });
 
+  it('collapses after streaming completes even if the user opened it during streaming', () => {
+    expect(resolveThinkingOpen(false, true)).toBe(false);
+  });
+
   it('shows only an inline thinking status before visible content streams', () => {
     expect(resolveThinkingPresentation('模型正在分析结构', false, true)).toEqual({
       mode: 'active-inline',
@@ -177,6 +456,21 @@ describe('summary thinking panel', () => {
       mode: 'complete-collapsed',
       text: '模型正在分析结构',
     });
+  });
+});
+
+describe('summary scroll preservation', () => {
+  it('keeps the previous manual scroll position while streaming re-renders', () => {
+    expect(resolveSummaryScrollTop(false, 240, 1000)).toBe(240);
+  });
+
+  it('sticks to the bottom only when the user was already near the bottom', () => {
+    expect(resolveSummaryScrollTop(true, 240, 1000)).toBe(1000);
+  });
+
+  it('lets the summary output frame fill the remaining panel height even when empty', () => {
+    expect(PANEL_STYLES).toContain('.vs-summary-scroll {\n  display: flex;');
+    expect(PANEL_STYLES).toContain('.vs-output {\n  flex: 1 1 auto;');
   });
 });
 
@@ -369,6 +663,83 @@ describe('parseOnePageJson', () => {
 });
 
 describe('one page regeneration', () => {
+  it('keeps the Bilibili one-page prompt and source footer on upName', async () => {
+    const createNode = (tagName: string): any => ({
+      tagName: tagName.toUpperCase(),
+      style: {},
+      children: [],
+      className: '',
+      append(...children: unknown[]) {
+        this.children.push(...children);
+      },
+      setAttribute(key: string, value: string) {
+        this[key] = value;
+      },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { createElement: createNode, createTextNode: (text: string) => ({ text }) },
+    });
+    Object.defineProperty(globalThis, 'Node', {
+      configurable: true,
+      value: function TestNode() {},
+    });
+    const data = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+    let requestText = '';
+    const client: TextAiClient = {
+      async complete(request) {
+        requestText = request.messages.map((item) => item.content).join('\n');
+        return {
+          content: JSON.stringify({
+            title: '一图流',
+            conclusion: '结论',
+            keyPoints: [
+              { title: '一', detail: '一' },
+              { title: '二', detail: '二' },
+              { title: '三', detail: '三' },
+            ],
+            takeaways: ['行动'],
+            tags: ['标签'],
+            source: { title: '源', url: 'https://www.bilibili.com/video/BV-one' },
+          }),
+        };
+      },
+    };
+
+    const result = await runOnePagePipeline({
+      summary: {
+        video: {
+          source: 'bilibili',
+          sourceId: 'BV-one',
+          bvid: 'BV-one',
+          cid: 1,
+          title: 'B站视频',
+          upName: 'UP主A',
+          url: 'https://www.bilibili.com/video/BV-one',
+        },
+        transcript: { plainText: '字幕', lines: [], charCount: 2 },
+        promptId: DEFAULT_CONFIG.summary.defaultPromptId,
+        content: '摘要',
+        createdAt: Date.now(),
+      },
+      textAiClient: client,
+      config: DEFAULT_CONFIG,
+      force: true,
+    });
+
+    expect(requestText).toContain('UP 主：UP主A');
+    expect(requestText).toContain('source{title,upName,url}');
+    expect(requestText).not.toContain('creatorName,platform');
+    expect(result.data.source.upName).toBe('UP主A');
+  });
+
   it('bypasses cached JSON when force regeneration is requested', async () => {
     const createNode = (tagName: string): any => ({
       tagName: tagName.toUpperCase(),
@@ -635,7 +1006,68 @@ describe('AppController one page generation', () => {
   });
 });
 
+describe('AppController video refresh', () => {
+  it('retries briefly when SPA navigation still exposes stale video info', async () => {
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { href: 'https://www.youtube.com/watch?v=new-video' },
+    });
+    const controller = new AppController();
+    controller.state.video = {
+      source: 'youtube',
+      sourceId: 'old-video',
+      title: 'Old video',
+      url: 'https://www.youtube.com/watch?v=old-video',
+    };
+    const videos = [
+      controller.state.video,
+      {
+        source: 'youtube' as const,
+        sourceId: 'new-video',
+        title: 'New video',
+        url: 'https://www.youtube.com/watch?v=new-video',
+      },
+    ];
+    let calls = 0;
+    (controller as any).currentProvider = () => ({
+      name: 'youtube',
+      match: () => true,
+      getVideoInfo: async () => videos[Math.min(calls++, videos.length - 1)],
+      getTranscript: async () => ({ plainText: '', lines: [], charCount: 0 }),
+      watchRouteChange: () => () => undefined,
+    });
+
+    await controller.refreshVideo();
+
+    expect(calls).toBe(2);
+    expect(controller.state.video?.sourceId).toBe('new-video');
+    expect(controller.state.transcript).toBeUndefined();
+    expect(controller.state.selectedSubtitleId).toBeUndefined();
+  });
+});
+
 describe('AppController cache management and clipboard', () => {
+  it('includes source, language, and subtitle id in summary cache keys', () => {
+    const controller = new AppController();
+    const baseVideo = {
+      source: 'youtube' as const,
+      sourceId: 'yt-cache',
+      title: 'Cache Video',
+      url: 'https://www.youtube.com/watch?v=yt-cache',
+    };
+
+    const englishKey = (controller as any).summaryCacheKey(baseVideo, 'en');
+    const chineseKey = (controller as any).summaryCacheKey(
+      { ...baseVideo, source: 'bilibili' as const },
+      'zh-CN',
+    );
+    controller.config = { ...controller.config, summary: { ...controller.config.summary, language: 'en-US' } };
+    const languageKey = (controller as any).summaryCacheKey(baseVideo, 'en');
+
+    expect(englishKey).not.toBe(chineseKey);
+    expect(englishKey).not.toBe(languageKey);
+  });
+
   it('clears the current video summary cache and state summary', () => {
     const data = new Map<string, string>();
     Object.defineProperty(globalThis, 'localStorage', {
@@ -910,6 +1342,30 @@ describe('panel navigation icons', () => {
   });
 });
 
+describe('panel settings navigation guard', () => {
+  it('leaves non-dirty settings tabs without prompting', () => {
+    let prompts = 0;
+    expect(shouldLeaveSettingsTab(false, () => {
+      prompts += 1;
+      return true;
+    })).toBe(true);
+    expect(prompts).toBe(0);
+  });
+
+  it('saves dirty settings before leaving when the user confirms', () => {
+    let saved = 0;
+    expect(shouldLeaveSettingsTab(true, () => true, () => {
+      saved += 1;
+      return true;
+    })).toBe(true);
+    expect(saved).toBe(1);
+  });
+
+  it('stays on settings when the user cancels the unsaved changes prompt', () => {
+    expect(shouldLeaveSettingsTab(true, () => false, () => true)).toBe(false);
+  });
+});
+
 describe('summary markdown export', () => {
   const video = {
     source: 'bilibili' as const,
@@ -931,7 +1387,8 @@ describe('summary markdown export', () => {
     });
 
     expect(markdown).toContain('# 测试/视频:标题');
-    expect(markdown).toContain('- UP: Karl');
+    expect(markdown).toContain('- Creator: Karl');
+    expect(markdown).toContain('- Platform: bilibili');
     expect(markdown).toContain('- 原链接: https://www.bilibili.com/video/BV-export');
     expect(markdown).toContain('# 结论\n\n核心内容');
   });

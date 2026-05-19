@@ -2,8 +2,9 @@ import { DirectOpenAIImageClient } from '../ai/image/DirectOpenAIImageClient';
 import { DirectOpenAITextClient } from '../ai/text/DirectOpenAITextClient';
 import { runOnePagePipeline } from '../onePage/onePagePipeline';
 import { exportElementAsPng } from '../onePage/exportPng';
-import { BilibiliProvider } from '../sources/bilibili/BilibiliProvider';
-import type { VideoSourceProvider } from '../sources/VideoSourceProvider';
+import { getActiveProvider, isSupportedVideoUrl } from '../sources/providers';
+import { watchVideoRouteChange } from '../sources/routeWatcher';
+import type { VideoInfo, VideoSourceProvider } from '../sources/VideoSourceProvider';
 import { loadConfig, saveConfig } from '../store/configStore';
 import { imageCache } from '../store/imageCache';
 import { onePageCache } from '../store/onePageCache';
@@ -15,11 +16,11 @@ import type { SummaryResult } from '../summary/types';
 import { getErrorMessage } from '../utils/errors';
 import { stableHash } from '../utils/hash';
 import { logger } from '../utils/logger';
+import { sleep } from '../utils/sleep';
 import { createInitialState, type AppState } from './AppState';
 import { TinyEmitter } from './events';
 
 export class AppController {
-  readonly provider: VideoSourceProvider = new BilibiliProvider();
   readonly events = new TinyEmitter();
   config: LocalConfig = loadConfig();
   state: AppState = createInitialState();
@@ -28,7 +29,7 @@ export class AppController {
   private toastTimer?: ReturnType<typeof setTimeout>;
 
   async mount(): Promise<void> {
-    this.unwatch = this.provider.watchRouteChange(() => void this.refreshVideo());
+    this.unwatch = watchVideoRouteChange(() => void this.refreshVideo());
     await this.refreshVideo();
   }
 
@@ -37,21 +38,30 @@ export class AppController {
   }
 
   async refreshVideo(): Promise<void> {
-    if (!this.provider.match(location.href)) return;
+    if (!isSupportedVideoUrl(location.href)) return;
     await this.runTask('读取视频信息', async () => {
-      const video = await this.provider.getVideoInfo();
-      const cached = summaryCache.get(this.summaryCacheKey(video.sourceId));
+      const provider = this.currentProvider();
+      const previousVideo = this.state.video;
+      const video = await this.readFreshVideoInfo(provider, previousVideo);
+      const cached = summaryCache.find(
+        (summary) =>
+          summary.video.source === video.source &&
+          summary.video.sourceId === video.sourceId &&
+          summary.promptId === this.config.summary.defaultPromptId &&
+          summary.transcript.languageCode === this.state.selectedSubtitleId,
+      );
       this.state = { ...createInitialState(), video, summary: cached, status: cached ? '已载入缓存摘要' : '已识别视频' };
     });
   }
 
   async generateSummary(): Promise<void> {
     await this.runTask('获取字幕', async () => {
-      const video = this.state.video ?? (await this.provider.getVideoInfo());
-      const subtitleOptions = this.provider.getSubtitleOptions ? await this.provider.getSubtitleOptions(video) : [];
+      const provider = this.currentProvider();
+      const video = this.state.video ?? (await provider.getVideoInfo());
+      const subtitleOptions = provider.getSubtitleOptions ? await provider.getSubtitleOptions(video) : [];
       const selectedSubtitleId =
         this.state.selectedSubtitleId ?? preferredSubtitleId(subtitleOptions, this.config.summary.language);
-      const transcript = await this.provider.getTranscript(video, selectedSubtitleId);
+      const transcript = await provider.getTranscript(video, selectedSubtitleId);
       this.state.video = video;
       this.state.transcript = transcript;
       this.state.subtitleOptions = subtitleOptions;
@@ -81,7 +91,7 @@ export class AppController {
       this.state.summary = summary;
       this.state.streamingSummary = undefined;
       this.state.summaryRequestPending = false;
-      summaryCache.set(this.summaryCacheKey(video.sourceId), summary);
+      summaryCache.set(this.summaryCacheKey(video, this.state.selectedSubtitleId), summary);
       this.setStatus('摘要已生成');
     });
   }
@@ -271,8 +281,8 @@ export class AppController {
   }
 
   clearCurrentSummaryCache(): void {
-    const sourceId = this.state.video?.sourceId;
-    if (sourceId) summaryCache.delete(this.summaryCacheKey(sourceId));
+    const video = this.state.video;
+    if (video) summaryCache.delete(this.summaryCacheKey(video, this.state.selectedSubtitleId));
     this.state.summary = undefined;
     this.state.streamingSummary = undefined;
     this.state.summaryRequestPending = false;
@@ -309,13 +319,15 @@ export class AppController {
   }
 
   async restoreCachedSummary(): Promise<boolean> {
-    const video = this.state.video ?? (await this.provider.getVideoInfo());
-    const exact = summaryCache.get(this.summaryCacheKey(video.sourceId));
+    const video = this.state.video ?? (await this.currentProvider().getVideoInfo());
+    const exact = summaryCache.get(this.summaryCacheKey(video, this.state.selectedSubtitleId));
     const cached =
       exact ??
       summaryCache.find(
         (summary) =>
-          summary.video.sourceId === video.sourceId && summary.promptId === this.config.summary.defaultPromptId,
+          summary.video.source === video.source &&
+          summary.video.sourceId === video.sourceId &&
+          summary.promptId === this.config.summary.defaultPromptId,
       );
     if (!cached) return false;
     this.state.video = video;
@@ -362,8 +374,28 @@ export class AppController {
     this.events.emit('statechange');
   }
 
-  private summaryCacheKey(sourceId: string): string {
-    return stableHash(`${sourceId}:${this.config.summary.defaultPromptId}:${this.config.textAi.model}`);
+  private currentProvider(): VideoSourceProvider {
+    return getActiveProvider(location.href, () => this.config);
+  }
+
+  private async readFreshVideoInfo(provider: VideoSourceProvider, previousVideo: VideoInfo | undefined): Promise<VideoInfo> {
+    let video = await provider.getVideoInfo();
+    if (!previousVideo || previousVideo.url === location.href || previousVideo.source !== video.source) return video;
+    for (let attempt = 0; attempt < 8 && video.sourceId === previousVideo.sourceId; attempt += 1) {
+      await sleep(150);
+      video = await provider.getVideoInfo();
+    }
+    return video;
+  }
+
+  private summaryCacheKey(videoOrSourceId: VideoInfo | string, subtitleId?: string): string {
+    const video =
+      typeof videoOrSourceId === 'string'
+        ? { source: this.state.video?.source ?? 'bilibili', sourceId: videoOrSourceId }
+        : videoOrSourceId;
+    return stableHash(
+      `${video.source}:${video.sourceId}:${this.config.summary.defaultPromptId}:${this.config.textAi.model}:${this.config.summary.language}:${subtitleId ?? ''}`,
+    );
   }
 }
 
@@ -406,14 +438,15 @@ function progressLabel(type: string): string {
 
 function preferredSubtitleId(options: Array<{ id: string }>, language: LocalConfig['summary']['language']): string | undefined {
   if (language === 'en-US') return options.find((item) => item.id.toLowerCase().startsWith('en'))?.id;
-  return options.find((item) => item.id === 'zh-CN')?.id ?? options.find((item) => item.id.startsWith('zh'))?.id;
+  return options.find((item) => item.id === 'zh-CN')?.id ?? options.find((item) => item.id.toLowerCase().startsWith('zh'))?.id;
 }
 
 export function buildSummaryMarkdown(summary: SummaryResult): string {
   const lines = [
     `# ${summary.video.title}`,
     '',
-    `- UP: ${summary.video.upName ?? 'Bilibili'}`,
+    `- Creator: ${summary.video.creatorName ?? summary.video.upName ?? summary.video.platform ?? summary.video.source}`,
+    `- Platform: ${summary.video.platform ?? summary.video.source}`,
     `- 原链接: ${summary.video.url}`,
     `- 生成时间: ${new Date(summary.createdAt).toLocaleString()}`,
     '',
