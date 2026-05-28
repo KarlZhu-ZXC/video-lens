@@ -1,0 +1,68 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Bilibili video summary",
+      "description": "Read Bilibili video metadata/subtitles and generate summaries, insights, one-image exports, and Markdown exports.",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "Existing provider, summary pipeline, one-image pipeline, tests and build passing in recent sessions."
+    },
+    {
+      "id": "feat-002",
+      "name": "YouTube watch/shorts support",
+      "description": "Support YouTube watch and shorts pages with provider registry, metadata extraction, page subtitles, youtubei fallback, translated tracks, and official API fallback configuration.",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "Implemented in src/sources/youtube and covered by test/core.test.ts YouTube source parsing tests."
+    },
+    {
+      "id": "feat-003",
+      "name": "Language-aware summaries",
+      "description": "Support UI language and subtitle/summary language settings, with English prompt variants and subtitle preference handling.",
+      "dependencies": ["feat-001", "feat-002"],
+      "status": "done",
+      "evidence": "Settings, prompt templates, transcript selection, and tests updated."
+    },
+    {
+      "id": "feat-004",
+      "name": "One-image export",
+      "description": "Generate structured one-image JSON, optional image prompt/background, render DOM card, and export PNG.",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "Existing onePage pipeline, templates, html-to-image export, and regression tests."
+    },
+    {
+      "id": "feat-005",
+      "name": "Summary streaming UX fixes",
+      "description": "Preserve manual scroll during streaming re-renders, collapse reasoning after completion, and keep the summary output frame full height in empty/short states.",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "Covered by summary thinking and scroll preservation tests in test/core.test.ts."
+    },
+    {
+      "id": "feat-006",
+      "name": "ASR fallback for no-subtitle videos",
+      "description": "Add an ASR path for videos where YouTube/Bilibili expose no usable subtitle tracks.",
+      "dependencies": ["feat-002"],
+      "status": "research",
+      "evidence": "ASR_INTEGRATION_RESEARCH.md documents low-cost options; implementation not started."
+    },
+    {
+      "id": "feat-007",
+      "name": "Bilibili subtitle WBI resilience",
+      "description": "Reduce risk from unsigned Bilibili x/player/wbi/v2 subtitle requests by adding fallback or WBI signing.",
+      "dependencies": ["feat-001"],
+      "status": "backlog",
+      "evidence": "Tracked in PROJECT_REVIEW_RECOMMENDATIONS.md backlog."
+    },
+    {
+      "id": "feat-008",
+      "name": "Harness files",
+      "description": "Add agent instructions, feature tracking, progress log, startup verification script, and handoff template.",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "Created by harness-creator session; init.sh syntax and feature_list.json parsing verified on 2026-05-19."
+    }
+  ]
+}

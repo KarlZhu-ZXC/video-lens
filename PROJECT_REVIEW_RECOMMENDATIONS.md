@@ -1,170 +1,202 @@
-# 项目优化与改进建议报告 (PROJECT_REVIEW_RECOMMENDATIONS)
+# 项目优化与改进建议报告
 
-基于对当前 `video-summary` 核心源码（包括 API 请求客户端、字幕解析器、DOM 渲染引擎、Obsidian 设计系统及平台适配）的全面 Review，我们整理出以下在**架构设计、多浏览器兼容性、平台稳定性及用户体验**上急需改进的 7 个核心点，并提供了具体的代码改进方案。
+本文档用于记录 `video-summary` 的已落地改动和后续 backlog。状态以当前代码为准，避免把历史 review 结论误当成仍需执行的任务。
 
----
+最后更新：2026-05-19
 
-## 1. 【高优先级】哔哩哔哩字幕 API 签名 (WBI) 机制失效风险
+## 已落地记录
 
-### 问题分析
-在 `src/sources/bilibili/subtitle.ts` 中，获取视频字幕列表直接请求了 Bilibili 的播放器 API 接口：
+### 1. 长视频分块合并阶段不再清空已生成内容
+
+状态：已处理。
+
+长视频分块摘要完成后，进入合并阶段时会继续保留已生成的分段摘要，避免正文区域回到“待生成”或空状态。
+
+### 2. Video Insights 回答 Markdown 样式修复
+
+状态：已处理。
+
+聊天气泡样式只作用于消息根节点的直接段落，不再把 Markdown 内部段落、加粗内容或换行块错误包成多个框。
+
+### 3. 一图流重新生成绕过缓存
+
+状态：已处理。
+
+一图流重新生成会传入 `force` 标记，绕过已有 JSON 和图片缓存，重新调用生成链路。
+
+### 4. 面板宽度统一由侧边拖拽控制
+
+状态：已处理。
+
+设置页移除了面板宽度字段。所有 Tab 共用同一个 `panelWidth` 配置，通过侧边 resize handle 调整并持久化。拖拽宽度保存不再弹出“设置已保存”toast。
+
+### 5. 请求模式统一为自动
+
+状态：已处理。
+
+设置页移除了文本模型和生图模型的请求模式选择。配置加载和保存时统一使用 `auto`：文本优先流式 `fetch`，必要时回退 `GM_xmlhttpRequest`；图片请求同样自动选择可用通道。
+
+### 6. 生图模型默认启用
+
+状态：已处理。
+
+设置页移除了“启用生图模型”字段。生图模型默认启用，是否调用图片模型由一图流模式决定。
+
+### 7. 连通性测试按钮位置与行为调整
+
+状态：已处理。
+
+文本模型和生图模型的“连通性测试”按钮移动到对应设置 section header 右侧。按钮 tooltip 明确说明会实际发送轻量 API 请求，成功和失败都会通过全局 toast 反馈。
+
+### 8. 语言设置与英文总结支持
+
+状态：已处理。
+
+设置页语言 section 包含“界面显示语言”和“字幕获取及总结语言”。英文总结会优先尝试英文字幕，摘要、长视频分块/合并、视频洞察和一图流 JSON 都有对应英文 prompt。切换总结语言时会清除旧字幕选择，避免继续复用之前自动选中的字幕源。
+
+### 9. YouTube watch / shorts 支持
+
+状态：已处理。
+
+新增 provider registry 和 `YouTubeProvider`，支持 YouTube `watch` / `shorts` 页面识别、页面内 `captionTracks` 字幕读取、JSON3/XML 字幕解析、英文/中文/翻译字幕优先级和官方 API 元数据备用配置。Prompt、缓存 key、设置页、README、SPEC 和 FEATURES 已改为 Bilibili + YouTube 的平台中性描述。
+
+注意：YouTube 字幕读取只覆盖 YouTube 已向页面或 youtubei player 响应暴露的人工字幕、自动字幕和可翻译字幕。无字幕视频需要 ASR 转录能力，详见 `ASR_INTEGRATION_RESEARCH.md`。
+
+### 10. YouTube 后续问题修复
+
+状态：已处理。
+
+- 同一 SPA 页面内打开另一个视频时，如果 URL 已变化但页面数据仍返回旧视频 id，`refreshVideo()` 会短暂重试，避免继续展示上一个视频。
+- 设置页表单有未保存更改时，切换到其他 Tab 会弹出确认框；确认后先保存配置再离开，取消则停留在设置页。
+- YouTube XML timedtext 字幕改为字符串解析，不再依赖 `DOMParser.parseFromString`，避免 Trusted Types 页面报错。
+
+### 11. YouTube 字幕策略升级
+
+状态：已处理。
+
+YouTube 页面没有暴露 `captionTracks` 时，会请求同源 `youtubei/v1/player` 作为纯前端 fallback；字幕源列表会主动展示目标语言翻译选项，例如 `English (translated from Chinese)`。
+
+### 12. ASR 低成本接入调研
+
+状态：已处理为调研文档，未实现。
+
+新增 `ASR_INTEGRATION_RESEARCH.md`，覆盖 Chrome Extension 标签页音频捕获 + 云端 ASR、用户上传、本地 WebGPU/WASM Whisper 和 Web Speech API 等方案。当前建议是：userscript 继续完善 YouTube 字幕/youtubei 策略；无字幕视频 ASR 更适合在 Chrome Extension 分支中实现。
+
+### 13. Bilibili 行为回退
+
+状态：已处理。
+
+为避免 YouTube 平台中性改动影响 Bilibili，已恢复 Bilibili provider 的原有 `routeWatcher`、视频信息字段和一图流 `upName` 主路径。一图流 JSON prompt/schema/footer 继续以 `source{title,upName,url}` 为主；YouTube 仅在没有 `upName` 时用 `creatorName` 兼容填充。
+
+### 14. 摘要渲染滚动与思考区行为
+
+状态：已处理。
+
+AI 总结流式渲染时会保存用户手动滚动位置；用户不在底部时，重渲染不会把滚动条拉回顶部。只有用户本来贴近底部时才继续自动跟随到底部。模型思考区在输出结束后默认折叠。
+
+### 15. 摘要输出框空状态高度
+
+状态：已处理。
+
+AI 总结页的输出框即使没有内容或内容很短，也会占满到底部按钮上方的剩余空间，不再缩成内容高度。
+
+## 未落地 Backlog
+
+### 1. 【高优先级】Bilibili 字幕接口 WBI 风险
+
+当前状态：未处理。
+
+当前 `src/sources/bilibili/subtitle.ts` 仍直接请求：
+
 ```typescript
-async function getSubtitleList(video: VideoInfo): Promise<SubtitleMeta[]> {
-  const res = await fetch(
-    `https://api.bilibili.com/x/player/wbi/v2?bvid=${encodeURIComponent(video.bvid!)}&cid=${video.cid}`,
-    { credentials: 'include' },
-  );
-  ...
-}
+https://api.bilibili.com/x/player/wbi/v2?bvid=...&cid=...
 ```
-**致命缺陷**：B站已对带有 `wbi` 路径的所有接口（如 `x/player/wbi/v2`）强制实施了 WBI 签名校验。在前端直接发起 Fetch / GM 请求，若不带 `w_rid` 和 `wts` 签名参数，B站服务器会拦截请求并返回 `code: -403` 或 `-401`（签名校验失败），导致用户在使用该 userscript 时遭遇“当前视频没有公开字幕”或“字幕列表请求失败”的报错。
 
-### 改进方案
-1. **采用免签名接口降级**：调用无 WBI 校验的传统接口，例如 `https://api.bilibili.com/x/player/v2?bvid=...&cid=...`。
-2. **优先从页面 DOM 数据读取**：B站页面通常会在 `window.__INITIAL_STATE__` 中暴露字幕列表。应优先利用已经载入的内存状态，减少 API 网络请求。
-3. **补充 WBI 签名算法**：若必须调用该接口，需先请求 `https://api.bilibili.com/x/web-interface/nav` 拿到 `img_key` 和 `sub_key`，然后在客户端完成 WBI 混淆盐值签名计算。
+风险说明：Bilibili 的 `wbi` 接口在部分场景可能要求 `w_rid` / `wts` 签名。若未签名请求被服务端拒绝，用户会看到“当前视频没有公开字幕”或“字幕列表请求失败”。这里不应假设所有环境必然失败，但它是实际稳定性风险。
 
----
+建议：
 
-## 2. 【中高优先级】Firefox 浏览器 OneImage 缩放 (CSS `zoom`) 兼容性崩溃
+- 优先调研 `https://api.bilibili.com/x/player/v2?bvid=...&cid=...` 是否仍能稳定返回字幕列表。
+- 尝试从页面已有状态中读取字幕列表，减少额外 API 请求。
+- 若必须继续使用 `wbi` 接口，再实现 WBI 签名：先请求 `x/web-interface/nav` 获取 key，再在客户端计算 `w_rid` / `wts`。
 
-### 问题分析
-在一图流预览视图（`src/ui/oneImageView.ts`）和布局样式（`src/ui/styles.ts`）中，一图流生成的卡片缩放完全依赖 CSS 的 `zoom` 属性：
+验收：
+
+- 有单元测试覆盖字幕列表解析、无字幕错误和 API fallback。
+- 至少用一个有字幕 Bilibili 视频在浏览器里验证。
+
+### 2. 【中高优先级】一图流预览缩放避免依赖 CSS `zoom`
+
+当前状态：未处理。
+
+当前 `.vs-image-viewer-stage` 仍使用：
+
 ```css
-.vs-image-viewer-stage {
-  width: var(--vs-card-width, 900px);
-  max-width: none;
-  zoom: var(--vs-zoom, 1);
-}
+zoom: var(--vs-zoom, 1);
 ```
-**兼容性缺陷**：`zoom` 属性从来都不是 W3C 的标准 CSS 属性。虽然 Chromium (Chrome/Edge/Brave) 和 WebKit (Safari) 对其进行了事实支持，但 **Firefox 浏览器完全不支持 `zoom`**。
-在 Firefox 浏览器下，一图流卡片将始终保持 900px 的全宽，使得缩放滑块及适配逻辑彻底失效，严重破坏 Obsidian UI 面板的视觉完整度。
 
-### 改进方案
-摒弃 `zoom`，使用标准的 CSS 2D 转换 `transform: scale()` 进行适配，并使用 `transform-origin` 保证对齐：
-```css
-.vs-image-viewer-stage {
-  width: var(--vs-card-width, 900px);
-  max-width: none;
-  transform: scale(var(--vs-zoom, 1));
-  transform-origin: top center;
-}
-```
-*注：由于使用 `scale` 缩放后，DOM 节点在文档流中所占的物理高度不会自动收缩，需要在包裹容器上计算并设置等比例的高度补偿，或设定 `overflow: hidden` 防止页面纵向出现大面积空白。*
+风险说明：`zoom` 不是标准 CSS 属性，Firefox 支持不稳定或不可用。一图流预览缩放在非 Chromium 环境下可能失效。
 
----
+建议：
 
-## 3. 【中优先级】Obsidian 主题中 "Geist" 和 "Geist Mono" 字体缺失加载
+- 用 `transform: scale(var(--vs-zoom, 1))` 替代 `zoom`。
+- 同步处理缩放后的文档流高度补偿，否则会出现大面积空白或滚动高度不正确。
+- 用 harness/Playwright 对桌面宽度和窄屏宽度做截图验证。
 
-### 问题分析
-在 `DESIGN.md` 中，项目声明统一使用 “Geist” 现代极客字体。在全局样式（`src/ui/styles.ts`）中，也做了如下声明：
-```css
-:host {
-  font-family: Geist, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-.vs-video-duration {
-  font-family: "Geist Mono", ui-monospace, monospace;
-}
-```
-**体验缺失**：项目中**仅引入了谷歌的 Material Symbols 图标字体，而根本没有加载 Geist 与 Geist Mono 的任何字体文件**。
-如果用户的操作系统上未安装 Geist 字体（99% 的普通用户均未安装），浏览器将默认降级到 `ui-sans-serif` 等系统常规字体。这使得本应充满科技质感、Obsidian 高级黑曜石感的 developer-grade 视觉美感打了折扣。
+### 3. 【中优先级】GM XHR 降级状态透明化
 
-### 改进方案
-在 `PANEL_STYLES` 顶部或 `styles.ts` 中，通过 CDN 显式引入 Geist 字体族文件：
-```css
-@import url("https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist-sans/style.css");
-@import url("https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist-mono/style.css");
-```
-这能确保跨平台（Win/Mac/Linux）和不同设备的用户都能体验到极致一致的高级暗色视觉。
+当前状态：未处理。
 
----
+当前文本请求 `auto` 模式优先走流式 `fetch`；当 fetch 失败且可用 `GM_xmlhttpRequest` 时，会回退到非流式 GM XHR。这个回退能提高可用性，但用户无法知道为什么流式输出突然变成等待后一次性出现。
 
-## 4. 【中优先级】`DirectOpenAITextClient` 自动降级时的静默体验流失
+建议：
 
-### 问题分析
-在 `DirectOpenAITextClient.ts` 中，系统采用非常棒的 `auto` 请求机制：优先尝试 `fetch` 进行流式摘要；当遇到跨域 CORS 拦截或 CSP (Content Security Policy) 限制而失败时，捕获异常并静默降级为 Tampermonkey 独占的 `GM_xmlhttpRequest`。
-```typescript
-try {
-  return await this.completeWithFetch(request, apiKey, options);
-} catch (error) {
-  if (typeof GM_xmlhttpRequest !== 'function') throw error;
-  return this.completeWithGmXhr(request, apiKey); // 静默回退
-}
-```
-**体验缺陷**：由于 `completeWithGmXhr` 采用的是 `stream: false` 的非流式传统网络请求，一旦发生回退：
-1. 流式打印动画会完全失效，界面会一直停留在“生成摘要”长达 10~20 秒。
-2. 用户不知道发生了降级，以为程序卡死，极易误触或直接关闭。
+- 先做状态透明化：触发 GM XHR 回退时，在状态栏或 toast 中提示“已自动启用跨域背景通道，可能延迟显示”。
+- 再调研 Tampermonkey 下 GM XHR 是否能稳定提供增量响应。不要默认承诺所有脚本管理器都支持可靠流式。
 
-### 改进方案
-1. **支持 GM_xmlhttpRequest 流式传输**：现代 Tampermonkey 的 `GM_xmlhttpRequest` 支持 `onreadystatechange` 监听。可封装 GM 通道流式解析，使其在降级后依然能够流畅实现打字机效果。
-2. **降级状态透明化**：在触发 catch 块降级时，通知 Controller 在 UI 状态栏输出一行微弱的提示（如：*“由于浏览器安全拦截，已自动启用跨域背景通道，流式传输可能会有延迟展示”*），提高系统的高级感和透明度。
+### 4. 【中低优先级】抽象 userscript 运行时适配层
 
----
+当前状态：未处理。
 
-## 5. 【中低优先级】缺乏统一的 Userscript API 平台兼容适配层
+`GM_getValue`、`GM_setValue`、`GM_setClipboard`、`GM_xmlhttpRequest` 与 `localStorage` fallback 判断仍散落在 store、controller 和 client 中。
 
-### 问题分析
-当前代码中，对于 `GM_getValue`、`GM_setValue`、`GM_setClipboard` 等特有接口的调用散落在各处，带有大量冗余的环境判断：
-```typescript
-const raw = typeof GM_getValue === 'function' ? GM_getValue(CONFIG_KEY, '') : localStorage.getItem(CONFIG_KEY);
-if (typeof GM_setClipboard === 'function') GM_setClipboard(content);
-```
-**架构问题**：
-* 造成了大量的重复判断代码，不够整洁。
-* 在 Vite Harness 本地测试（`harness.html`）中，不得不频繁去补齐或者 patch 这些全局变量，极其不利于编写整洁的单元测试。
-* 无法平滑兼容诸如 Violentmonkey、Greasemonkey 等对老旧 `GM_` 支持度不一的脚本管理器，以及未来可能进行的 Chrome Extension（MV3）移植。
+建议：
 
-### 改进方案
-在 `src/utils/` 下抽象出一个统一的平台适配器（例如 `environment.ts` 或 `gmAdapter.ts`）：
-```typescript
-export const storage = {
-  get: (key: string, fallback: string): string => {
-    return typeof GM_getValue === 'function' ? GM_getValue(key, fallback) : localStorage.getItem(key) ?? fallback;
-  },
-  set: (key: string, value: string): void => {
-    if (typeof GM_setValue === 'function') GM_setValue(key, value);
-    else localStorage.setItem(key, value);
-  }
-};
-export const clipboard = {
-  copy: async (text: string): Promise<void> => {
-    if (typeof GM_setClipboard === 'function') GM_setClipboard(text);
-    else await navigator.clipboard?.writeText(text);
-  }
-};
-```
-让 Controller 和 Store 彻底与具体的 userscript 运行时解耦，使得业务逻辑纯净化，单元测试更轻量。
+- 新增 `src/utils/gmAdapter.ts` 或 `src/runtime/userscriptAdapter.ts`。
+- 集中封装 storage、clipboard、xhr 能力探测和 fallback。
+- 让 store/controller 依赖 adapter，降低测试和未来 Chrome Extension 迁移成本。
 
----
+### 5. 【中优先级】PNG 导出失败诊断与资源容错
 
-## 6. 【中优先级】`html-to-image` 导出图片在严格 CSP 站点下的拦截容错
+当前状态：未处理。
 
-### 问题分析
-一图流导出使用 `html-to-image` 库，在底层会动态将 DOM 节点克隆，将其作为 `foreignObject` 封装进 SVG 并转化为 data URL 渲染。
-**致命痛点**：在 YouTube 和 Bilibili 等实行极高安全等级 CSP (Content Security Policy) 的网页中，浏览器可能会彻底拦截 `data:` 图片协议的加载，或当一图流中包含外部 network 图片时，外部资源可能会使 Canvas 跨域污染（CORS Taint），导致 PNG 导出报错 `SecurityError`。
+一图流导出使用 `html-to-image` 的 `toPng`。在 YouTube/Bilibili 页面中，严格 CSP、`data:` 限制、外部图片跨域或 canvas taint 都可能导致导出失败。当前导出失败没有专门的诊断提示。
 
-### 改进方案
-1. **异常抛出与诊断指引**：在 `AppController.ts` 导出异常的 catch 块中，识别典型跨域/安全策略报错，弹出明确指引（如：*“导出图片被网站安全策略拦截，您可以直接使用系统截图，或前往独立网页/Vite测试页导出。”*）
-2. **CORS 图片代理转化**：对于卡片内用到的网络图片，先通过 `GM_xmlhttpRequest` 在 background 下载为 Blob，再转为本地的 Object URL 填充进卡片，彻底避开浏览器的画布沙箱污染。
+建议：
 
----
+- 在 `exportOneImage()` catch 路径中识别 `SecurityError`、CSP、tainted canvas 等典型错误，给出明确用户提示。
+- 对卡片中的外部图片资源，调研是否需要通过 `GM_xmlhttpRequest` 下载为 Blob/Object URL 后再参与导出。
+- 保留 harness 导出作为稳定验证路径。
 
-## 7. 【低优先级】Mascot 拖动悬浮在窗口 Resize 时的视口越界拦截
+### 6. 【低优先级】Mascot 悬浮按钮窗口 resize 越界处理
 
-### 问题分析
-Mascot 悬浮按钮允许用户自由拖动并记录坐标，但在 `Panel.ts` 的拖拽越界拦截中，仅在 `pointerup` 阶段对当前的窗口宽高进行了 Clamp。
-**体验缺陷**：如果用户将 Mascot 拖动至浏览器最右侧边缘，之后将浏览器窗口缩小（Resize）或设备从横屏切换为竖屏，Mascot 很有可能会瞬间掉出当前的屏幕视口，导致用户在不刷新页面的情况下“再也找不到悬浮球”，无法重新呼出面板。
+当前状态：未处理。
 
-### 改进方案
-在 `Panel` 组件挂载时，监听全局的视口改变事件，并自动重定位越界悬浮球：
-```typescript
-window.addEventListener('resize', () => {
-  if (this.controller.config.ui.collapsed && this.shellNode) {
-    const rect = this.shellNode.getBoundingClientRect();
-    const safePos = clampLauncherPosition(rect.left, rect.top, this.shellNode);
-    this.shellNode.style.left = `${safePos.x}px`;
-    this.shellNode.style.top = `${safePos.y}px`;
-  }
-});
-```
-确保面板在任何屏幕分辨率动态调整下均能维持 100% 的可用性和可交互性。
+Mascot 拖动结束时会 clamp 到当前视口，但窗口缩小或屏幕方向变化后，已保存坐标可能跑出视口。
+
+建议：
+
+- 监听 `resize` / `orientationchange`。
+- 当面板处于 collapsed 状态且 launcher 已拖动时，重新 clamp 坐标。
+- 避免每次 render 都重复注册监听，注意 cleanup。
+
+### 7. 【低优先级】字体策略复核
+
+当前状态：暂缓。
+
+项目样式使用 `Geist` / `Geist Mono` 作为首选字体，但当前没有内置或加载 Geist 字体。直接通过 CDN `@import` 字体会增加外部网络依赖、隐私暴露和站点 CSP 变量，不建议作为默认改动。
+
+建议：
+
+- 默认继续使用系统字体 fallback，保持 userscript 轻量和离线稳定。
+- 如果确实要统一字体，优先考虑构建时内联必要字体或作为可选视觉增强，而不是强依赖第三方 CDN。
