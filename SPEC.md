@@ -21,6 +21,8 @@ userscript metadata 声明 Tampermonkey grant：
 - `GM_xmlhttpRequest`
 - `GM_setClipboard`
 
+userscript metadata 同时声明 `@connect` 允许访问字幕/元数据域名和 OpenAI-compatible API 域名，包括中国区 MiniMax `api.minimaxi.com` 与国际区 MiniMax `api.minimax.io`。
+
 配置优先写入 Tampermonkey storage，避免 API Key 落到视频网站页面 origin 的 `localStorage`。请求通道由系统统一使用 `auto`：流式文本请求优先走浏览器 `fetch`，必要时回退到 GM XHR 的非流式请求；图片请求同样优先使用 fetch，失败时回退 GM XHR。设置页不再暴露请求模式选择。
 
 ## 适用页面
