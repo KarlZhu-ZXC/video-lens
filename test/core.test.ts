@@ -34,7 +34,7 @@ import { estimateSummaryMaxTokens, runSummaryPipeline } from '../src/summary/sum
 import { extractThinkBlocks } from '../src/summary/think';
 import { getStatusText, getUiText } from '../src/ui/i18n';
 import { resolveOneImageStatus } from '../src/ui/oneImageView';
-import { clampPanelWidth, panelIconPaths, resolveSummaryScrollTop } from '../src/ui/panel';
+import { clampPanelWidth, isDocumentFullscreen, panelIconPaths, resolveSummaryScrollTop } from '../src/ui/panel';
 import { shouldLeaveSettingsTab } from '../src/ui/panel';
 import { formatTranscriptLanguage, resolveThinkingOpen } from '../src/ui/summaryView';
 import { isVideoSummaryHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
@@ -1339,6 +1339,20 @@ describe('panel navigation icons', () => {
     expect(panelIconPaths('oneImage')).toHaveLength(3);
     expect(panelIconPaths('settings')).toHaveLength(2);
     expect(panelIconPaths('collapse')).toHaveLength(2);
+  });
+});
+
+describe('panel fullscreen visibility', () => {
+  it('detects standard fullscreen elements', () => {
+    expect(isDocumentFullscreen({ fullscreenElement: {} as Element })).toBe(true);
+  });
+
+  it('detects WebKit fullscreen elements', () => {
+    expect(isDocumentFullscreen({ webkitFullscreenElement: {} as Element })).toBe(true);
+  });
+
+  it('keeps the panel visible outside fullscreen mode', () => {
+    expect(isDocumentFullscreen({ fullscreenElement: null, webkitFullscreenElement: null })).toBe(false);
   });
 });
 

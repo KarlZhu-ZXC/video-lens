@@ -8,6 +8,11 @@ This file is the restart point for future agent sessions. Keep entries short, fa
 - Harness purpose: preserve project-specific rules, current feature state, verification commands, and session continuity.
 - Current known backlog lives in `PROJECT_REVIEW_RECOMMENDATIONS.md`.
 
+## 2026-05-30
+
+- Added cross-platform fullscreen visibility handling for the panel host.
+- Bilibili and YouTube browser fullscreen playback now hide the launcher and expanded panel until fullscreen exits.
+
 ## Current State
 
 - Project supports Bilibili and YouTube userscript flows.

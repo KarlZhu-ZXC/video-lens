@@ -13,6 +13,7 @@ export class Panel {
   private readonly host = document.createElement('div');
   private readonly root: ShadowRoot;
   private readonly styleNode = el('style', {}, [PANEL_STYLES]);
+  private readonly handleFullscreenChange = () => this.syncFullscreenVisibility();
   private shellNode?: HTMLElement;
   private toastNode?: HTMLElement;
   private renderedToastId?: number;
@@ -29,9 +30,13 @@ export class Panel {
     this.activeTab = controller.config.ui.defaultTab;
     this.root = this.host.attachShadow({ mode: 'open' });
     document.documentElement.append(this.host);
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange);
+    this.syncFullscreenVisibility();
   }
 
   render(): void {
+    this.syncFullscreenVisibility();
     this.captureScrollIntent();
     if (!this.styleNode.isConnected) this.root.append(this.styleNode);
     this.shellNode?.remove();
@@ -79,7 +84,13 @@ export class Panel {
   }
 
   destroy(): void {
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
+    document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange);
     this.host.remove();
+  }
+
+  private syncFullscreenVisibility(): void {
+    this.host.hidden = isDocumentFullscreen(document);
   }
 
   private renderHeader(): HTMLElement {
@@ -372,6 +383,12 @@ export function clampLauncherPosition(x: number, y: number, launcher: HTMLElemen
 
 export function clampPanelWidth(width: number): number {
   return Math.round(Math.min(900, Math.max(300, width)));
+}
+
+export function isDocumentFullscreen(
+  doc: { fullscreenElement?: Element | null; webkitFullscreenElement?: Element | null },
+): boolean {
+  return Boolean(doc.fullscreenElement ?? doc.webkitFullscreenElement);
 }
 
 export function resolveSummaryScrollTop(sticksToBottom: boolean, previousScrollTop: number, scrollHeight: number): number {
