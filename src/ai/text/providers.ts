@@ -15,6 +15,7 @@ export const TEXT_PROVIDERS: TextProvider[] = [
     label: 'MiniMax-CN',
     defaultBaseUrl: 'https://api.minimaxi.com/v1',
     models: [
+      { id: 'MiniMax-M3', label: 'MiniMax-M3' },
       { id: 'MiniMax-M2.7', label: 'MiniMax-M2.7' },
       { id: 'MiniMax-M2.5', label: 'MiniMax-M2.5' },
       { id: 'MiniMax-M2.1', label: 'MiniMax-M2.1' },

@@ -13,8 +13,9 @@ export const DEFAULT_CONFIG: LocalConfig = {
     providerMode: 'direct',
     apiUrl: 'https://api.minimaxi.com/v1',
     apiKey: '',
-    model: 'MiniMax-M2.7',
+    model: 'MiniMax-M3',
     modelList: [
+      'MiniMax-M3',
       'MiniMax-M2.7',
       'MiniMax-M2.5',
       'MiniMax-M2.1',

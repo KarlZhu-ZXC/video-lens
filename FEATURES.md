@@ -525,6 +525,7 @@ Authorization: Bearer <API Key>
 
 当前选项：
 
+- `MiniMax-M3`
 - `MiniMax-M2.7`
 - `MiniMax-M2.5`
 - `MiniMax-M2.1`

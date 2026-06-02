@@ -538,7 +538,8 @@ describe('MiniMax provider config', () => {
     );
     expect(config.apiUrl).toBe('https://api.minimaxi.com/v1');
     expect(config.apiKey).toBe('key');
-    expect(config.model).toBe('MiniMax-M2.7');
+    expect(config.model).toBe('MiniMax-M3');
+    expect(config.modelList).toContain('MiniMax-M3');
     expect(config.modelList).toContain('MiniMax-M2.7');
   });
 

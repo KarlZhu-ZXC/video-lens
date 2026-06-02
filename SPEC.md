@@ -81,6 +81,7 @@ API Key 保存和请求前会规范化：
 
 模型下拉当前包含：
 
+- `MiniMax-M3`
 - `MiniMax-M2.7`
 - `MiniMax-M2.5`
 - `MiniMax-M2.1`
