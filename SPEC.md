@@ -21,6 +21,8 @@ userscript metadata 声明 Tampermonkey grant：
 - `GM_xmlhttpRequest`
 - `GM_setClipboard`
 
+userscript metadata 同时声明 `@connect` 允许访问字幕/元数据域名和 OpenAI-compatible API 域名，包括中国区 MiniMax `api.minimaxi.com` 与国际区 MiniMax `api.minimax.io`。
+
 配置优先写入 Tampermonkey storage，避免 API Key 落到视频网站页面 origin 的 `localStorage`。请求通道由系统统一使用 `auto`：流式文本请求优先走浏览器 `fetch`，必要时回退到 GM XHR 的非流式请求；图片请求同样优先使用 fetch，失败时回退 GM XHR。设置页不再暴露请求模式选择。
 
 ## 适用页面
@@ -157,7 +159,7 @@ UI 使用 `streamingSummary` 临时状态持续刷新。生成完成后写入 `s
 - 设置页语言 section 包含界面显示语言和字幕获取及总结语言。字幕/总结语言为英文时，字幕源优先尝试英文字幕；YouTube 没有英文但原字幕可翻译时，会优先使用 `tlang=en` 翻译字幕。摘要、长视频分块/合并、视频洞察和一图流 JSON 使用对应语言 prompt。
 - 设置页视频源 section 提供 YouTube 字幕策略：`auto` 默认先读页面内字幕，配置了官方 API 后可作为备用；`page` 只用页面字幕；`official` 优先官方 API 能力。
 - 设置页表单有未保存更改时，切换到其他 Tab 会弹出确认框；确认后先保存配置再离开，取消则停留在设置页。
-- 设置页文本模型和生图模型 section header 右侧提供 `连通性测试`。按钮 tooltip 会提示会实际发送轻量 API 请求；成功或失败都会通过全局 toast 反馈。
+- 设置页文本模型和生图模型 section header 右侧提供 `连通性测试`。按钮 tooltip 会提示会实际发送轻量 API 请求；点击后会先保存并校验当前 section 的表单值，再发起测试请求；成功或失败都会通过全局 toast 反馈。
 - 设置页不再提供文本/图片请求模式、生图模型启用开关或面板宽度下拉；请求模式固定为自动，生图模型默认启用。
 - 全局顶部通知独立于 Tab 内容渲染，切换 Tab 不会重启未结束的通知动画。
 - Obsidian 高对比暗色 UI 使用 zinc surface scale 和清晰 outline 分层。

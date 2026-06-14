@@ -38,15 +38,7 @@ export class DirectOpenAITextClient implements TextAiClient {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: request.model,
-        messages: request.messages,
-        temperature: request.temperature ?? this.config.temperature,
-        max_tokens: request.maxTokens ?? this.config.maxTokens,
-        stream: request.stream ?? false,
-        tools: request.tools,
-        tool_choice: request.toolChoice,
-      }),
+      body: JSON.stringify(buildChatCompletionsPayload(request, this.config)),
     });
 
     if (!res.ok) throw new Error(`Text generation failed: ${res.status} ${await res.text()}`);
@@ -95,15 +87,7 @@ export class DirectOpenAITextClient implements TextAiClient {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-          data: JSON.stringify({
-            model: request.model,
-            messages: request.messages,
-            temperature: request.temperature ?? this.config.temperature,
-            max_tokens: request.maxTokens ?? this.config.maxTokens,
-            stream: false,
-            tools: request.tools,
-            tool_choice: request.toolChoice,
-          }),
+        data: JSON.stringify(buildChatCompletionsPayload({ ...request, stream: false }, this.config)),
         onload: (res) => {
           if (res.status < 200 || res.status >= 300) {
             reject(new Error(`Text generation failed: ${res.status} ${res.responseText}`));
@@ -119,10 +103,29 @@ export class DirectOpenAITextClient implements TextAiClient {
   }
 }
 
+export function buildChatCompletionsPayload(request: TextCompletionRequest, config: LocalConfig['textAi']): object {
+  const maxTokens = request.maxTokens ?? config.maxTokens;
+  const payload: Record<string, unknown> = {
+    model: request.model,
+    messages: request.messages,
+    temperature: request.temperature ?? config.temperature,
+    stream: request.stream ?? false,
+    tools: request.tools,
+    tool_choice: request.toolChoice,
+  };
+  if (usesMaxCompletionTokens(request.model)) payload.max_completion_tokens = maxTokens;
+  else payload.max_tokens = maxTokens;
+  return payload;
+}
+
 export function normalizeChatCompletionsUrl(apiUrl: string): string {
   const trimmed = normalizeMiniMaxBaseUrl(apiUrl);
   if (!trimmed) return trimmed;
   if (/\/chat\/completions$/i.test(trimmed)) return trimmed;
   if (/\/v1$/i.test(trimmed)) return `${trimmed}/chat/completions`;
   return trimmed;
+}
+
+function usesMaxCompletionTokens(model: string): boolean {
+  return /^MiniMax-M3$/i.test(model.trim());
 }
