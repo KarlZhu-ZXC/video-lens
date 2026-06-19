@@ -1,92 +1,43 @@
-import { getPromptById, getPromptTemplate } from '../prompts/defaultPrompts';
-import { renderPrompt } from '../prompts/renderPrompt';
-import { writeOnePageJsonTool } from '../prompts/toolPrompts';
-import { imageCache } from '../store/imageCache';
-import { onePageCache } from '../store/onePageCache';
-import { stableHash } from '../utils/hash';
-import { composeOnePage } from './composeOnePage';
-import { generateImagePrompt } from './imagePromptPipeline';
-import { parseOnePageJson } from './onePageSchema';
-import type { OnePagePipelineInput, OnePagePipelineResult } from './types';
 import type { GeneratedImage } from '../ai/image/types';
+import { imageCache } from '../store/imageCache';
+import { stableHash } from '../utils/hash';
+import type { OnePagePipelineInput, OnePagePipelineResult } from './types';
+
+export const ONE_IMAGE_PROMPT_TEMPLATE =
+  '根据以下视频内容总结，生成一张信息可视化的精美配图，风格清晰美观，适合作为视频总结的封面图：\n\n{summary}';
+
+export function buildOneImagePrompt(summary: string): string {
+  return ONE_IMAGE_PROMPT_TEMPLATE.replace('{summary}', summary.trim());
+}
 
 export async function runOnePagePipeline(input: OnePagePipelineInput): Promise<OnePagePipelineResult> {
-  const { summary, config, textAiClient, imageAiClient, signal, onProgress } = input;
-  const cacheKey = stableHash(`${summary.video.sourceId}:${summary.content}:${config.onePage.defaultTemplate}`);
-
-  onProgress?.({ type: 'generating_json' });
-  let data = input.force ? undefined : onePageCache.get(cacheKey);
-  if (!data) {
-    const prompt = getPromptById('one_page_json')!;
-    const request = {
-      model: config.textAi.model,
-      messages: [
-        {
-          role: 'user' as const,
-          content: renderPrompt(getPromptTemplate(prompt, config.summary.language), {
-            title: summary.video.title,
-            upName: summary.video.upName ?? summary.video.creatorName,
-            url: summary.video.url,
-            summary: summary.content,
-          }),
-        },
-      ],
-      temperature: 0.4,
-      maxTokens: 1600,
-      stream: false,
-    };
-    let result;
-    try {
-      result = await textAiClient.complete(
-        {
-          ...request,
-          tools: [writeOnePageJsonTool()],
-          toolChoice: { type: 'function', function: { name: 'write_one_page_json' } },
-        },
-        { signal },
-      );
-    } catch {
-      result = await textAiClient.complete(request, { signal });
-    }
-    onProgress?.({ type: 'validating_json' });
-    data = parseOnePageJson(result.content);
-    data.source = {
-      ...data.source,
-      title: data.source.title || summary.video.title,
-      upName: data.source.upName ?? summary.video.upName ?? summary.video.creatorName,
-      url: data.source.url || summary.video.url,
-    };
-    onePageCache.set(cacheKey, data);
+  const { summary, config, imageAiClient, signal, onProgress } = input;
+  const prompt = buildOneImagePrompt(summary.content);
+  const cacheKey = stableHash(
+    `${summary.video.source}:${summary.video.sourceId}:${summary.content}:${config.imageAi.apiUrl}:${config.imageAi.model}:${ONE_IMAGE_PROMPT_TEMPLATE}`,
+  );
+  const cached = input.force ? undefined : imageCache.get(cacheKey);
+  if (cached) {
+    return { prompt: cached.prompt, generatedImage: { dataUrl: cached.dataUrl, url: cached.url } };
   }
 
-  let imagePrompt: string | undefined;
-  const cachedImage = input.force ? undefined : imageCache.get(cacheKey);
-  let generatedImage: GeneratedImage | undefined = cachedImage
-    ? { dataUrl: cachedImage.dataUrl, url: cachedImage.url }
-    : undefined;
-
-  if (config.onePage.mode !== 'text_card_only' && config.imageAi.enabled && imageAiClient) {
-    if (!generatedImage) {
-      onProgress?.({ type: 'generating_image_prompt' });
-      imagePrompt = await generateImagePrompt(data, textAiClient, config);
-      onProgress?.({ type: 'generating_ai_image' });
-      const image = await imageAiClient.generateImage(
-        {
-          model: config.imageAi.model,
-          prompt: imagePrompt,
-          size: config.imageAi.size,
-          quality: config.imageAi.quality,
-          responseFormat: config.imageAi.responseFormat,
-        },
-        { signal },
-      );
-      generatedImage = image;
-      imageCache.set(cacheKey, { dataUrl: generatedImage.dataUrl, url: generatedImage.url, prompt: imagePrompt });
-    }
+  onProgress?.({ type: 'preparing_prompt' });
+  onProgress?.({ type: 'generating_image' });
+  const generatedImage: GeneratedImage = await imageAiClient.generateImage(
+    {
+      model: config.imageAi.model,
+      prompt,
+      size: config.imageAi.size,
+      quality: config.imageAi.quality,
+      responseFormat: config.imageAi.responseFormat,
+      n: 1,
+    },
+    { signal },
+  );
+  if (!generatedImage.dataUrl && !generatedImage.url && !generatedImage.blob) {
+    throw new Error('图片模型未返回可用图片');
   }
-
-  onProgress?.({ type: 'rendering_card' });
-  const composedElement = composeOnePage(data, config, generatedImage);
+  imageCache.set(cacheKey, { dataUrl: generatedImage.dataUrl, url: generatedImage.url, prompt });
   onProgress?.({ type: 'done' });
-  return { data, imagePrompt, generatedImage, composedElement };
+  return { prompt, generatedImage };
 }

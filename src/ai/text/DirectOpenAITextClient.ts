@@ -1,5 +1,5 @@
 import type { LocalConfig } from '../../store/types';
-import { normalizeApiKey, normalizeMiniMaxBaseUrl } from './providers';
+import { normalizeApiKey, normalizeOpenAIBaseUrl } from './providers';
 import { createOpenAIStreamParser } from './streamParser';
 import type { TextAiClient } from './TextAiClient';
 import type { TextCompletionDelta, TextCompletionRequest, TextCompletionResult } from './types';
@@ -119,7 +119,7 @@ export function buildChatCompletionsPayload(request: TextCompletionRequest, conf
 }
 
 export function normalizeChatCompletionsUrl(apiUrl: string): string {
-  const trimmed = normalizeMiniMaxBaseUrl(apiUrl);
+  const trimmed = normalizeOpenAIBaseUrl(apiUrl);
   if (!trimmed) return trimmed;
   if (/\/chat\/completions$/i.test(trimmed)) return trimmed;
   if (/\/v1$/i.test(trimmed)) return `${trimmed}/chat/completions`;

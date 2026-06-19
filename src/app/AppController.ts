@@ -1,13 +1,11 @@
 import { DirectOpenAIImageClient } from '../ai/image/DirectOpenAIImageClient';
 import { DirectOpenAITextClient } from '../ai/text/DirectOpenAITextClient';
 import { runOnePagePipeline } from '../onePage/onePagePipeline';
-import { exportElementAsPng } from '../onePage/exportPng';
 import { getActiveProvider, isSupportedVideoUrl } from '../sources/providers';
 import { watchVideoRouteChange } from '../sources/routeWatcher';
 import type { VideoInfo, VideoSourceProvider } from '../sources/VideoSourceProvider';
 import { loadConfig, saveConfig } from '../store/configStore';
 import { imageCache } from '../store/imageCache';
-import { onePageCache } from '../store/onePageCache';
 import { summaryCache } from '../store/summaryCache';
 import type { LocalConfig } from '../store/types';
 import { askVideoInsight } from '../summary/videoInsightsPipeline';
@@ -145,23 +143,14 @@ export class AppController {
     }
 
     await this.runTask('生成一图流', async () => {
-      const textAiClient = new DirectOpenAITextClient(this.config.textAi);
-      const imageAiClient = this.config.imageAi.enabled ? new DirectOpenAIImageClient(this.config.imageAi) : undefined;
-      const oneImageConfig: LocalConfig = {
-        ...this.config,
-        onePage: { ...this.config.onePage, ...this.config.oneImage },
-      };
       const result = await runOnePagePipeline({
         summary: this.state.summary!,
-        textAiClient,
-        imageAiClient,
-        config: oneImageConfig,
+        imageAiClient: new DirectOpenAIImageClient(this.config.imageAi),
+        config: this.config,
         force: options.force,
         onProgress: (event) => this.setStatus(progressLabel(event.type)),
       });
-      this.state.oneImage = result.data;
-      this.state.oneImageElement = result.composedElement;
-      this.state.oneImageZoom = 1;
+      this.state.generatedImage = result.generatedImage;
       this.setStatus('一图流已生成');
     });
   }
@@ -171,15 +160,18 @@ export class AppController {
   }
 
   async exportOneImage(): Promise<void> {
-    if (!this.state.oneImageElement) {
+    if (!this.state.generatedImage) {
       await this.generateOneImage();
-      if (!this.state.oneImageElement) return;
+      if (!this.state.generatedImage) return;
     }
-    await exportElementAsPng(
-      this.state.oneImageElement,
-      this.config.oneImage.exportScale,
-      `${sanitizeFileName(this.state.video?.title ?? 'video-summary')}.png`,
-    );
+    const image = this.state.generatedImage;
+    const href = image.dataUrl ?? image.url ?? (image.blob ? URL.createObjectURL(image.blob) : '');
+    if (!href) throw new Error('没有可导出的图片');
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `${sanitizeFileName(this.state.video?.title ?? 'video-summary')}.png`;
+    link.click();
+    if (image.blob) window.setTimeout(() => URL.revokeObjectURL(href), 0);
     this.setStatus('PNG 已导出');
   }
 
@@ -206,11 +198,6 @@ export class AppController {
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
     this.setStatus('MarkDown 已导出');
-  }
-
-  setOneImageZoom(zoom: number): void {
-    this.state.oneImageZoom = Math.min(2.5, Math.max(0.35, zoom));
-    this.emit();
   }
 
   updateConfig(patch: Partial<LocalConfig>, options: { showStatus?: boolean } = {}): void {
@@ -251,10 +238,6 @@ export class AppController {
   }
 
   async testImageConnection(): Promise<void> {
-    if (this.config.oneImage.mode === 'text_card_only') {
-      this.setStatus('当前一图流模式不需要生图模型');
-      return;
-    }
     if (!this.config.imageAi.apiKey.trim()) {
       this.setStatus('请先在设置中填写图片模型 API Key');
       return;
@@ -268,7 +251,7 @@ export class AppController {
       return;
     }
     await this.runTask('测试生图模型连通性', async () => {
-      await new DirectOpenAIImageClient({ ...this.config.imageAi, enabled: true, requestMode: 'auto' }).generateImage({
+      await new DirectOpenAIImageClient({ ...this.config.imageAi, requestMode: 'auto' }).generateImage({
         model: this.config.imageAi.model,
         prompt: 'Connectivity test image. Simple neutral abstract background, no text, no logo.',
         size: this.config.imageAi.size,
@@ -291,20 +274,25 @@ export class AppController {
 
   clearAllCaches(): void {
     summaryCache.clear();
-    onePageCache.clear();
     imageCache.clear();
     this.state.summary = undefined;
     this.state.streamingSummary = undefined;
-    this.state.oneImage = undefined;
-    this.state.oneImageElement = undefined;
-    this.state.onePage = undefined;
-    this.state.onePageElement = undefined;
+    this.state.generatedImage = undefined;
     this.setStatus('已清空全部缓存');
   }
 
   toggleCollapsed(): void {
     this.config = { ...this.config, ui: { ...this.config.ui, collapsed: !this.config.ui.collapsed } };
     this.emit();
+  }
+
+  async openFromLauncher(): Promise<void> {
+    if (!this.config.ui.collapsed || this.state.busy) return;
+    this.config = { ...this.config, ui: { ...this.config.ui, collapsed: false } };
+    this.emit();
+    if (this.state.summary) return;
+    if (await this.restoreCachedSummary()) return;
+    await this.generateSummary();
   }
 
   updateLauncherPosition(position: { x: number; y: number }): void {
@@ -414,7 +402,6 @@ const TOAST_STATUSES = new Set([
   '已清空全部缓存',
   '文本模型连通性正常',
   '生图模型连通性正常',
-  '当前一图流模式不需要生图模型',
   'MarkDown 已导出',
   '设置已保存',
 ]);
@@ -425,12 +412,8 @@ export function shouldToastStatus(status: string): boolean {
 
 function progressLabel(type: string): string {
   const labels: Record<string, string> = {
-    generating_json: '生成一图流 JSON',
-    validating_json: '校验一图流 JSON',
-    generating_image_prompt: '生成图片 prompt',
-    generating_ai_image: '生成 AI 背景图',
-    rendering_card: '渲染中文信息图',
-    composing: '合成图片',
+    preparing_prompt: '准备生图提示词',
+    generating_image: '生成一图流图片',
     done: '一图流已生成',
   };
   return labels[type] ?? type;

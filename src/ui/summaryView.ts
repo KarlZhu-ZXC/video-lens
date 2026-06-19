@@ -102,9 +102,7 @@ function renderVideoCard(controller: AppController): HTMLElement {
 function renderConfigurationRow(controller: AppController): HTMLElement {
   const t = createUiText(controller.config.ui.language);
   const textModel = controller.config.textAi.model || t('modelUnset');
-  const imageModel = controller.config.imageAi.enabled
-    ? controller.config.imageAi.model || t('modelUnset')
-    : t('summary.imageDisabled');
+  const imageModel = controller.config.imageAi.model || t('modelUnset');
   const transcriptLabel = formatTranscriptLanguage(controller.state.transcript ?? summaryTranscript(controller));
   return el('section', { class: 'vs-config-row', 'aria-label': t('summary.configuration') }, [
     el('span', { class: 'vs-config-label' }, [t('summary.configuration')]),

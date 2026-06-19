@@ -7,31 +7,16 @@ export const DEFAULT_CONFIG: LocalConfig = {
     enabledSources: ['bilibili', 'youtube'],
     youtube: { captionStrategy: 'auto', apiKey: '', oauthAccessToken: '' },
   },
-  providerMode: 'direct',
   textAi: {
-    provider: 'minimax',
-    providerMode: 'direct',
     apiUrl: 'https://api.minimaxi.com/v1',
     apiKey: '',
     model: 'MiniMax-M3',
-    modelList: [
-      'MiniMax-M3',
-      'MiniMax-M2.7',
-      'MiniMax-M2.5',
-      'MiniMax-M2.1',
-      'MiniMax-M2.1-highspeed',
-      'MiniMax-M2',
-      'MiniMax-M1',
-      'MiniMax-Text-01',
-    ],
     temperature: 0.7,
     maxTokens: 2000,
     stream: true,
     requestMode: 'auto',
   },
   imageAi: {
-    enabled: true,
-    providerMode: 'direct',
     apiStyle: 'openai_images',
     apiUrl: 'https://api.openai.com/v1/images/generations',
     apiKey: '',
@@ -41,7 +26,6 @@ export const DEFAULT_CONFIG: LocalConfig = {
     responseFormat: 'b64_json',
     requestMode: 'auto',
   },
-  remote: { backendBaseUrl: '' },
   summary: {
     autoRun: false,
     defaultPromptId: 'summary_plain',
@@ -51,22 +35,6 @@ export const DEFAULT_CONFIG: LocalConfig = {
     maxChunks: 20,
   },
   videoInsights: { maxHistoryMessages: 8 },
-  onePage: {
-    enabled: true,
-    mode: 'ai_image_background',
-    defaultTemplate: 'classic',
-    exportScale: 2,
-    width: 900,
-    includeQrCode: false,
-  },
-  oneImage: {
-    enabled: true,
-    mode: 'ai_image_background',
-    defaultTemplate: 'classic',
-    exportScale: 2,
-    width: 900,
-    includeQrCode: false,
-  },
   ui: {
     language: 'zh-CN',
     position: 'right',
@@ -92,8 +60,8 @@ export function loadConfig(): LocalConfig {
         oauthAccessToken: config.source.youtube?.oauthAccessToken ?? '',
       },
     },
-    textAi: { ...config.textAi, requestMode: 'auto' },
-    imageAi: { ...config.imageAi, enabled: true, requestMode: 'auto' },
+    textAi: pickTextAi(config.textAi),
+    imageAi: pickImageAi(config.imageAi),
     ui: { ...config.ui, collapsed: true },
   };
 }
@@ -122,17 +90,38 @@ export function stripSensitiveConfigForStorage(config: LocalConfig): LocalConfig
 
 function mergeConfig(base: LocalConfig, partial: LocalConfig): LocalConfig {
   return {
-    ...base,
-    ...partial,
+    schemaVersion: base.schemaVersion,
     source: { ...base.source, ...partial.source },
-    textAi: { ...base.textAi, ...partial.textAi },
-    imageAi: { ...base.imageAi, ...partial.imageAi },
-    remote: { ...base.remote, ...partial.remote },
+    textAi: pickTextAi({ ...base.textAi, ...partial.textAi }),
+    imageAi: pickImageAi({ ...base.imageAi, ...partial.imageAi }),
     summary: { ...base.summary, ...partial.summary },
     videoInsights: { ...base.videoInsights, ...partial.videoInsights },
-    onePage: { ...base.onePage, ...partial.onePage },
-    oneImage: { ...base.oneImage, ...partial.oneImage },
     ui: { ...base.ui, ...partial.ui },
     prompts: { ...base.prompts, ...partial.prompts },
+  };
+}
+
+function pickTextAi(value: LocalConfig['textAi']): LocalConfig['textAi'] {
+  return {
+    apiUrl: value.apiUrl,
+    apiKey: value.apiKey,
+    model: value.model,
+    temperature: value.temperature,
+    maxTokens: value.maxTokens,
+    stream: value.stream,
+    requestMode: 'auto',
+  };
+}
+
+function pickImageAi(value: LocalConfig['imageAi']): LocalConfig['imageAi'] {
+  return {
+    apiStyle: value.apiStyle,
+    apiUrl: value.apiUrl,
+    apiKey: value.apiKey,
+    model: value.model,
+    size: value.size,
+    quality: value.quality,
+    responseFormat: value.responseFormat,
+    requestMode: 'auto',
   };
 }

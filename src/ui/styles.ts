@@ -1846,6 +1846,15 @@ select:focus {
   }
 }
 
+.vs-generated-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 14px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .28);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

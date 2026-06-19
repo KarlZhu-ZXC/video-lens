@@ -1,6 +1,6 @@
 # video-summary
 
-Bilibili / YouTube 视频页 userscript：读取视频信息和字幕，调用 OpenAI-compatible 文本模型生成流式摘要、视频洞察问答和一图流 JSON，再可选调用图片模型生成背景图，最后在前端合成中文信息图并导出 PNG。
+Bilibili / YouTube 视频页 userscript：读取视频信息和字幕，通过 OpenAI-compatible 文本模型生成流式摘要和视频洞察问答，并可将摘要直接交给图片模型生成一图流图片。
 
 ## 使用
 
@@ -39,10 +39,10 @@ pnpm test
 
 - Bilibili 视频信息识别和字幕获取
 - YouTube `watch` / `shorts` 视频信息识别和字幕获取；默认读取页面内字幕，没有页面字幕时会用同源 `youtubei/v1/player` 作为纯前端 fallback，可配置 YouTube 官方 API 作为备用元数据路径
-- Minimax-CN / OpenAI-compatible 文本摘要、分块摘要、视频洞察问答
+- OpenAI-compatible 文本摘要、分块摘要、视频洞察问答
 - 流式摘要渲染、低干扰模型思考展示、Markdown 正文渲染
-- 一图流 JSON、图片 prompt、AI 背景图生成
-- Shadow DOM 本地面板、悬浮启动按钮、设置、Tampermonkey 配置存储、本地缓存、PNG 导出
+- 固定提示词拼接文本摘要后，直接调用图片模型生成一图流
+- Shadow DOM 本地面板、点击即总结的悬浮启动按钮、设置、Tampermonkey 配置存储、本地缓存、PNG 导出
 - 请求统一使用自动模式：文本优先流式 fetch，必要时回退 GM XHR；图片请求也自动选择可用通道
 - 设置页支持真实 API 连通性测试；已保存 API Key 不会回填到密码输入框，留空保存会继续使用旧 key；表单有未保存更改时切换 Tab 会先确认是否保存
 - 设置页支持界面语言和字幕/总结语言；英文总结会优先尝试英文字幕并使用英文 prompt；YouTube 可显示人工字幕、自动字幕和翻译字幕源

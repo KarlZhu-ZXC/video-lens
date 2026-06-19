@@ -63,10 +63,7 @@ const controller = {
     panel.render();
   },
   async generateOneImage() {
-    const preview = document.createElement('div');
-    preview.style.cssText = 'width:360px;aspect-ratio:4/5;border-radius:16px;background:#18181b;border:1px solid #27272a;padding:24px;color:#fafafa;display:grid;align-content:end;gap:12px;';
-    preview.innerHTML = '<strong style="font-size:28px;color:#a78bfa">Video Core</strong><span style="color:#a1a1aa;line-height:1.5">A compact visual summary card preview.</span>';
-    controller.state = { ...controller.state, oneImageElement: preview, status: 'One page generated' };
+    controller.state = { ...controller.state, generatedImage: { dataUrl: ONE_IMAGE_FIXTURE }, status: 'One page generated' };
     panel.render();
   },
   async generateOnePage() {
@@ -74,16 +71,12 @@ const controller = {
   },
   exportOneImage() {},
   exportOnePage() {},
-  setOneImageZoom(zoom: number) {
-    controller.state = { ...controller.state, oneImageZoom: zoom };
-    panel.render();
-  },
   clearCurrentSummaryCache() {
     controller.state = { ...controller.state, summary: undefined, status: 'Cleared this video cache' };
     panel.render();
   },
   clearAllCaches() {
-    controller.state = { ...controller.state, summary: undefined, oneImageElement: undefined, status: 'Cleared all caches' };
+    controller.state = { ...controller.state, summary: undefined, generatedImage: undefined, status: 'Cleared all caches' };
     panel.render();
   },
   testTextConnection() {
@@ -99,6 +92,8 @@ const controller = {
     panel.render();
   },
 } as unknown as AppController;
+
+const ONE_IMAGE_FIXTURE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#18181b"/><circle cx="620" cy="180" r="130" fill="#7c3aed"/><text x="72" y="570" fill="#a78bfa" font-family="sans-serif" font-size="34">VIDEO SUMMARY</text><text x="72" y="650" fill="#fafafa" font-family="sans-serif" font-size="64" font-weight="700">Core Insight</text></svg>');
 
 const scenario = new URL(location.href).searchParams.get('scenario');
 if (scenario === 'long-summary') {

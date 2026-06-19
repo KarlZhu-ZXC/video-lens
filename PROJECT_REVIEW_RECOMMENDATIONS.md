@@ -2,9 +2,15 @@
 
 本文档用于记录 `video-summary` 的已落地改动和后续 backlog。状态以当前代码为准，避免把历史 review 结论误当成仍需执行的任务。
 
-最后更新：2026-05-19
+最后更新：2026-06-19
 
 ## 已落地记录
+
+### 17. 模型配置去供应商化与直接生图
+
+状态：已处理。
+
+文本模型和图片模型各自只配置 Base URL、API Key 和模型。旧供应商选择、模型预设以及一图流模式已移除。一图流改为使用固定提示词拼接文本摘要后直接调用图片模型，不再生成 JSON、二次生成 Prompt 或使用 HTML/CSS 卡片合成。点击悬浮入口会立即执行缓存优先的文本总结。
 
 ### 1. 长视频分块合并阶段不再清空已生成内容
 
@@ -52,7 +58,7 @@
 
 状态：已处理。
 
-设置页语言 section 包含“界面显示语言”和“字幕获取及总结语言”。英文总结会优先尝试英文字幕，摘要、长视频分块/合并、视频洞察和一图流 JSON 都有对应英文 prompt。切换总结语言时会清除旧字幕选择，避免继续复用之前自动选中的字幕源。
+设置页语言 section 包含“界面显示语言”和“字幕获取及总结语言”。英文总结会优先尝试英文字幕，摘要、长视频分块/合并和视频洞察都有对应英文 prompt。切换总结语言时会清除旧字幕选择，避免继续复用之前自动选中的字幕源。
 
 ### 9. YouTube watch / shorts 支持
 
@@ -86,7 +92,7 @@ YouTube 页面没有暴露 `captionTracks` 时，会请求同源 `youtubei/v1/pl
 
 状态：已处理。
 
-为避免 YouTube 平台中性改动影响 Bilibili，已恢复 Bilibili provider 的原有 `routeWatcher`、视频信息字段和一图流 `upName` 主路径。一图流 JSON prompt/schema/footer 继续以 `source{title,upName,url}` 为主；YouTube 仅在没有 `upName` 时用 `creatorName` 兼容填充。
+为避免 YouTube 平台中性改动影响 Bilibili，已恢复 Bilibili 视频源 provider 的原有 `routeWatcher` 和视频信息字段。后续直接生图重构未改变这些来源边界。
 
 ### 14. 摘要渲染滚动与思考区行为
 

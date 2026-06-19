@@ -71,6 +71,14 @@
       "dependencies": ["feat-001", "feat-002"],
       "status": "done",
       "evidence": "Panel listens for standard and WebKit fullscreen changes; fullscreen detection is covered by test/core.test.ts."
+    },
+    {
+      "id": "feat-010",
+      "name": "Providerless direct image flow",
+      "description": "Use independent Base URL, API Key, and model settings for text and image AI; start cached-or-new summaries from the launcher; generate one-image output directly from a fixed prompt plus summary.",
+      "dependencies": ["feat-001", "feat-002"],
+      "status": "done",
+      "evidence": "Provider registry and structured one-image pipeline removed; direct-image and launcher cache tests pass."
     }
   ]
 }

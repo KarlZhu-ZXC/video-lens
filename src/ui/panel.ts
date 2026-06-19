@@ -307,7 +307,8 @@ export class Panel {
       launcher.releasePointerCapture(event.pointerId);
       launcher.classList.remove('dragging');
       if (!moved) {
-        this.controller.toggleCollapsed();
+        this.activeTab = 'summary';
+        void this.controller.openFromLauncher();
         return;
       }
       const rect = launcher.getBoundingClientRect();

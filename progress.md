@@ -19,11 +19,15 @@ This file is the restart point for future agent sessions. Keep entries short, fa
 - YouTube subtitles use page tracks, youtubei fallback, translated tracks, JSON3/XML parsing, and optional official API configuration.
 - Bilibili one-image behavior should remain `upName`-first.
 - ASR is researched but not implemented.
+- Text and image AI each use independent Base URL, API Key, and model settings without a model-provider selector.
+- Clicking the launcher performs cache-first summary generation.
+- One-image generation directly sends a fixed prompt plus summary to the image model; JSON and DOM card composition are removed.
 
 ## Verification Log
 
 - 2026-05-19: `bash -n init.sh` passed.
 - 2026-05-19: `node -e "JSON.parse(...feature_list.json...)"` passed.
+- 2026-06-19: `pnpm test` passed (81 tests, 1 opt-in integration test skipped); `pnpm build` passed; settings and one-image harness scenarios inspected successfully.
 
 ## Open Risks
 

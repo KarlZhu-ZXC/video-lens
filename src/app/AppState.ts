@@ -1,4 +1,4 @@
-import type { OneImageSummaryData } from '../onePage/onePageSchema';
+import type { GeneratedImage } from '../ai/image/types';
 import type { VideoInfo, Transcript, SubtitleOption } from '../sources/VideoSourceProvider';
 import type { SummaryResult, VideoInsightsMessage } from '../summary/types';
 
@@ -10,11 +10,7 @@ export interface AppState {
   summary?: SummaryResult;
   streamingSummary?: SummaryResult;
   summaryRequestPending: boolean;
-  oneImage?: OneImageSummaryData;
-  oneImageElement?: HTMLElement;
-  oneImageZoom: number;
-  onePage?: OneImageSummaryData;
-  onePageElement?: HTMLElement;
+  generatedImage?: GeneratedImage;
   videoInsightsHistory: VideoInsightsMessage[];
   streamingVideoInsight?: VideoInsightsMessage;
   status: string;
@@ -29,7 +25,6 @@ export function createInitialState(): AppState {
   return {
     videoInsightsHistory: [],
     subtitleOptions: [],
-    oneImageZoom: 1,
     status: '等待操作',
     busy: false,
     summaryRequestPending: false,
