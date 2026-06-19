@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { chunkText } from '../src/ai/chunking';
 import { normalizeImageResponseFormat, parseGeneratedImage, sanitizeImagePrompt } from '../src/ai/image/DirectOpenAIImageClient';
-import { normalizeChatCompletionsUrl } from '../src/ai/text/DirectOpenAITextClient';
+import { buildChatCompletionsPayload, normalizeChatCompletionsUrl } from '../src/ai/text/DirectOpenAITextClient';
 import { applyTextProviderConfig, getTextProvider, normalizeApiKey, normalizeMiniMaxBaseUrl } from '../src/ai/text/providers';
 import { createOpenAIStreamParser, parseOpenAIStreamDeltas } from '../src/ai/text/streamParser';
 import type { TextAiClient } from '../src/ai/text/TextAiClient';
@@ -541,6 +541,36 @@ describe('MiniMax provider config', () => {
     expect(config.model).toBe('MiniMax-M3');
     expect(config.modelList).toContain('MiniMax-M3');
     expect(config.modelList).toContain('MiniMax-M2.7');
+  });
+
+  it('uses max_completion_tokens for MiniMax-M3 chat completions', () => {
+    const payload = buildChatCompletionsPayload(
+      {
+        model: 'MiniMax-M3',
+        messages: [{ role: 'user', content: 'Reply with OK.' }],
+        maxTokens: 128,
+        stream: false,
+      },
+      DEFAULT_CONFIG.textAi,
+    ) as Record<string, unknown>;
+
+    expect(payload.max_completion_tokens).toBe(128);
+    expect(payload.max_tokens).toBeUndefined();
+  });
+
+  it('keeps max_tokens for earlier MiniMax chat models', () => {
+    const payload = buildChatCompletionsPayload(
+      {
+        model: 'MiniMax-M2.7',
+        messages: [{ role: 'user', content: 'Reply with OK.' }],
+        maxTokens: 8,
+        stream: false,
+      },
+      DEFAULT_CONFIG.textAi,
+    ) as Record<string, unknown>;
+
+    expect(payload.max_tokens).toBe(8);
+    expect(payload.max_completion_tokens).toBeUndefined();
   });
 
   it('shows provider labels correctly and applies DeepSeek defaults', () => {

@@ -1,4 +1,5 @@
 import type { AppController } from '../app/AppController';
+import type { LocalConfig } from '../store/types';
 import {
   applyTextProviderConfig,
   getTextProvider,
@@ -12,6 +13,7 @@ import { createUiText, type UiLanguage } from './i18n';
 
 export const CONNECTION_TEST_LABEL = '连通性测试';
 const CONNECTION_TEST_TOOLTIP = '会实际发送一次轻量 API 请求，用于检查连通性，可能产生极少量 token 或图片调用消耗。';
+type SaveScope = 'all' | 'text' | 'image';
 
 export interface SettingsViewOptions {
   onDirtyChange?: (dirty: boolean) => void;
@@ -98,14 +100,18 @@ export function renderSettingsView(controller: AppController, options: SettingsV
         field(t('settings.youtubeOauthToken'), youtubeOauthToken),
       ]),
       el('section', { class: 'vs-settings-group' }, [
-        settingsHeader(t('settings.textGroup'), () => controller.testTextConnection()),
+        settingsHeader(t('settings.textGroup'), async () => {
+          if (saveSettings('text')) await controller.testTextConnection();
+        }),
         field(t('settings.provider'), providerSelect),
         field(t('settings.model'), textModel),
         textBaseUrlField,
         field('API Key', textKey),
       ]),
       el('section', { class: 'vs-settings-group' }, [
-        settingsHeader(t('settings.imageGroup'), () => controller.testImageConnection()),
+        settingsHeader(t('settings.imageGroup'), async () => {
+          if (saveSettings('image')) await controller.testImageConnection();
+        }),
         field(t('settings.mode'), mode),
         field(t('settings.imageModel'), imageModel),
         field(t('settings.imageApiUrl'), imageApi),
@@ -120,7 +126,7 @@ export function renderSettingsView(controller: AppController, options: SettingsV
       actionButton(
         t('actions.saveSettings'),
         () => {
-          saveSettings();
+          saveSettings('all');
         },
         true,
         { disabled: controller.state.busy },
@@ -150,53 +156,67 @@ export function renderSettingsView(controller: AppController, options: SettingsV
     notifyDirty();
   }
 
-  function saveSettings(): boolean {
-    const error = validateSettings();
+  function saveSettings(scope: SaveScope = 'all'): boolean {
+    const error = validateSettings(scope);
     if (error) {
       validation.textContent = error;
       validation.hidden = false;
       return false;
     }
     validation.hidden = true;
-    controller.updateConfig({
-      ui: { ...config.ui, language: languageSelect.value as UiLanguage },
-      source: {
-        ...config.source,
-        enabledSources: ['bilibili', 'youtube'],
-        youtube: {
-          captionStrategy: youtubeCaptionStrategy.value as 'auto' | 'page' | 'official',
-          apiKey: resolveSecretValueForSave(youtubeConfig.apiKey ?? '', youtubeApiKey.value),
-          oauthAccessToken: resolveSecretValueForSave(youtubeConfig.oauthAccessToken ?? '', youtubeOauthToken.value),
-        },
-      },
-      summary: { ...config.summary, language: summaryLanguageSelect.value as typeof config.summary.language },
-      textAi: applyTextProviderConfig(config.textAi, {
-        providerId: providerSelect.value as TextProviderId,
-        baseUrl: textBaseUrl.value,
-        apiKey: resolveSecretValueForSave(config.textAi.apiKey, textKey.value),
-        model: textModel.value,
-        requestMode: 'auto',
-      }),
-      imageAi: {
-        ...config.imageAi,
-        enabled: true,
-        apiUrl: imageApi.value,
-        apiKey: resolveSecretValueForSave(config.imageAi.apiKey, imageKey.value),
-        model: imageModel.value,
-        requestMode: 'auto',
-      },
-      onePage: { ...config.onePage, mode: mode.value as typeof config.onePage.mode },
-      oneImage: { ...config.oneImage, mode: mode.value as typeof config.oneImage.mode },
+    const textAi = applyTextProviderConfig(config.textAi, {
+      providerId: providerSelect.value as TextProviderId,
+      baseUrl: textBaseUrl.value,
+      apiKey: resolveSecretValueForSave(config.textAi.apiKey, textKey.value),
+      model: textModel.value,
+      requestMode: 'auto',
     });
+    const imageAi: LocalConfig['imageAi'] = {
+      ...config.imageAi,
+      enabled: true,
+      apiUrl: imageApi.value,
+      apiKey: resolveSecretValueForSave(config.imageAi.apiKey, imageKey.value),
+      model: imageModel.value,
+      requestMode: 'auto',
+    };
+    if (scope === 'text') {
+      controller.updateConfig({ textAi });
+    } else if (scope === 'image') {
+      controller.updateConfig({
+        imageAi,
+        onePage: { ...config.onePage, mode: mode.value as typeof config.onePage.mode },
+        oneImage: { ...config.oneImage, mode: mode.value as typeof config.oneImage.mode },
+      });
+    } else {
+      controller.updateConfig({
+        ui: { ...config.ui, language: languageSelect.value as UiLanguage },
+        source: {
+          ...config.source,
+          enabledSources: ['bilibili', 'youtube'],
+          youtube: {
+            captionStrategy: youtubeCaptionStrategy.value as 'auto' | 'page' | 'official',
+            apiKey: resolveSecretValueForSave(youtubeConfig.apiKey ?? '', youtubeApiKey.value),
+            oauthAccessToken: resolveSecretValueForSave(youtubeConfig.oauthAccessToken ?? '', youtubeOauthToken.value),
+          },
+        },
+        summary: { ...config.summary, language: summaryLanguageSelect.value as typeof config.summary.language },
+        textAi,
+        imageAi,
+        onePage: { ...config.onePage, mode: mode.value as typeof config.onePage.mode },
+        oneImage: { ...config.oneImage, mode: mode.value as typeof config.oneImage.mode },
+      });
+    }
     options.onDirtyChange?.(false);
     return true;
   }
 
-  function validateSettings(): string {
-    if (!resolveSecretValueForSave(config.textAi.apiKey, textKey.value)) return '请填写文本模型 API Key';
-    if (!textModel.value.trim()) return '请填写文本模型名称';
-    if (providerSelect.value === 'custom' && !textBaseUrl.value.trim()) return '请填写自定义文本模型 Base URL';
-    if (mode.value !== 'text_card_only') {
+  function validateSettings(scope: SaveScope = 'all'): string {
+    if (scope === 'all' || scope === 'text') {
+      if (!resolveSecretValueForSave(config.textAi.apiKey, textKey.value)) return '请填写文本模型 API Key';
+      if (!textModel.value.trim()) return '请填写文本模型名称';
+      if (providerSelect.value === 'custom' && !textBaseUrl.value.trim()) return '请填写自定义文本模型 Base URL';
+    }
+    if ((scope === 'all' || scope === 'image') && mode.value !== 'text_card_only') {
       if (!resolveSecretValueForSave(config.imageAi.apiKey, imageKey.value)) return '请填写生图模型 API Key';
       if (!imageModel.value.trim()) return '请填写生图模型名称';
       if (!imageApi.value.trim()) return '请填写生图模型 API URL';
