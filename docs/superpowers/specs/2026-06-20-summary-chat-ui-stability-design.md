@@ -25,11 +25,22 @@ When the user is already near the bottom, the existing scroll container is moved
 
 Chat follow-up streaming may initially retain the structural render path, but it must use synchronous scroll restoration before paint so consecutive renders never expose the temporary top position. The implementation should avoid emitting duplicate structural and stream events for one terminal image result.
 
+## Static Video Context
+
+The video thumbnail card and model-configuration row are page context, not conversation messages. They are mounted above the conversation scroll container and remain visible while summary and chat content scrolls.
+
+Their order is:
+
+1. Video thumbnail card.
+2. Model-configuration row.
+
+This reverses the current order. The subtitle selector remains at the top of the scrollable conversation content because it directly controls which transcript is summarized.
+
 ## Summary Toolbar
 
 The summary toolbar is absent while there is no completed summary, while the summary is pending, and while summary content is streaming. It appears only when `state.summary` contains the completed result.
 
-The toolbar has no special surface fill or separator border. Its background is transparent and its spacing visually belongs to the assistant message. Message-level copy/download controls use the same transparent treatment.
+The toolbar has no special surface fill or separator border. Its background is transparent and its spacing visually belongs to the assistant message. Summary and message-level function buttons align to the left and use the same transparent treatment.
 
 ## Empty Summary Composer
 
@@ -61,10 +72,11 @@ Automated coverage must prove:
 - Only the active image-mode field group is visible.
 - Saved inactive-mode values survive mode changes.
 - Initial summary `streamchange` patches the existing output instead of rebuilding the panel.
+- The video card precedes the configuration row and both remain outside the conversation scroll container.
 - Bottom-stick and manual-scroll behavior operate on the same mounted scroll element.
 - Rapid consecutive updates do not expose or preserve a temporary top position.
 - The summary toolbar is absent before and during generation and appears after completion.
-- Toolbar styling is transparent and borderless.
+- Toolbar styling is transparent, borderless, and left-aligned.
 - Empty-summary textarea and Enter behavior are disabled while the button starts summary generation.
 - Completed-summary composer restores normal question sending.
 - Image failures create a conversation message and top toast.
