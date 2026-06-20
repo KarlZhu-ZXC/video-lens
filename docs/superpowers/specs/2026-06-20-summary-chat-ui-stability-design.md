@@ -27,14 +27,15 @@ Chat follow-up streaming may initially retain the structural render path, but it
 
 ## Static Video Context
 
-The video thumbnail card and model-configuration row are page context, not conversation messages. They are mounted above the conversation scroll container and remain visible while summary and chat content scrolls.
+The video thumbnail card, model-configuration row, and subtitle selector are page context, not conversation messages. They are mounted above the conversation scroll container and remain visible while summary and chat content scrolls.
 
 Their order is:
 
 1. Video thumbnail card.
 2. Model-configuration row.
+3. Subtitle selector, when multiple subtitle sources are available.
 
-This reverses the current order. The subtitle selector remains at the top of the scrollable conversation content because it directly controls which transcript is summarized.
+This reverses the current card/configuration order. Only the summary response and follow-up conversation messages belong to the scroll container.
 
 ## Summary Toolbar
 
@@ -72,7 +73,7 @@ Automated coverage must prove:
 - Only the active image-mode field group is visible.
 - Saved inactive-mode values survive mode changes.
 - Initial summary `streamchange` patches the existing output instead of rebuilding the panel.
-- The video card precedes the configuration row and both remain outside the conversation scroll container.
+- The video card precedes the configuration row and subtitle selector; all three remain outside the conversation scroll container.
 - Bottom-stick and manual-scroll behavior operate on the same mounted scroll element.
 - Rapid consecutive updates do not expose or preserve a temporary top position.
 - The summary toolbar is absent before and during generation and appears after completion.
