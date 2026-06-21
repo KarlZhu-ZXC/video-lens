@@ -447,12 +447,31 @@ describe('ChatGPT web image client', () => {
   });
 });
 
-describe('summary toolbar styling', () => {
-  it('keeps quick-action icons borderless and blended into the chat background', () => {
+describe('summary presentation styling', () => {
+  it('keeps metadata and quick actions compact', () => {
     const rule = /\.vs-output-tool \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    const metaRule = /\.vs-video-meta-item \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    const tooltipRule = /\.vs-output-tool::after \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     expect(rule).toContain('border: 0;');
     expect(rule).toContain('background: transparent;');
     expect(rule).toContain('box-shadow: none;');
+    expect(metaRule).toContain('cursor: default;');
+    expect(tooltipRule).toContain('top: calc(100% + 2px);');
+    expect(tooltipRule).toContain('left: calc(50% + 2px);');
+    expect(tooltipRule).toContain('bottom: auto;');
+    expect(tooltipRule).toContain('right: auto;');
+  });
+
+  it('styles the generated image trigger and full-screen preview', () => {
+    const trigger = /\.vs-chat-image-trigger \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    const overlay = /\.vs-image-preview-overlay \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    const toolbar = /\.vs-image-preview-toolbar \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    expect(trigger).toContain('cursor: zoom-in;');
+    expect(overlay).toContain('position: fixed;');
+    expect(overlay).toContain('inset: 0;');
+    expect(PANEL_STYLES).toContain('.vs-image-preview-overlay[hidden]');
+    expect(toolbar).toContain('bottom: 24px;');
+    expect(toolbar).toContain('left: 50%;');
   });
 });
 
@@ -494,13 +513,13 @@ describe('ChatGPT image receiver', () => {
       projectId: 'g-p-abc',
     })).toBe(true);
     expect(isProjectChildRoute({
-      currentUrl: 'https://chatgpt.com/g/g-p-6a357a38342081918dad2ca18bb9f9c7-sheng-tu/c/6a364c02-c6b4-83ea-9fb3-4f26c0d714e1',
-      projectId: 'g-p-6a357a38342081918dad2ca18bb9f9c7',
+      currentUrl: 'https://chatgpt.com/g/g-p-00000000000000000000000000000000-image/c/00000000-0000-0000-0000-000000000000',
+      projectId: 'g-p-00000000000000000000000000000000',
     })).toBe(true);
     expect(isProjectChildRoute({
       currentUrl: 'https://chatgpt.com/c/child',
-      projectId: 'g-p-6a357a38342081918dad2ca18bb9f9c7',
-      projectContextHref: '/g/g-p-6a357a38342081918dad2ca18bb9f9c7-sheng-tu/project',
+      projectId: 'g-p-00000000000000000000000000000000',
+      projectContextHref: '/g/g-p-00000000000000000000000000000000-image/project',
     })).toBe(true);
     expect(isProjectChildRoute({
       currentUrl: 'https://chatgpt.com/c/child',
