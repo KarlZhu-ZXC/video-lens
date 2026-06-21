@@ -30,19 +30,19 @@ export async function runSummaryPipeline(input: SummaryPipelineInput): Promise<S
 
   if (chunks.length <= 1) {
     onProgress?.('生成摘要');
-    const partial = { content: '', reasoning: '', inThink: false };
+    let rawContent = '';
+    let nativeReasoning = '';
     const result = await ask(textAiClient, config, getPromptTemplate(summaryPrompt, config.summary.language), {
       video,
       transcriptText: transcript.plainText,
       tokenSourceChars: transcript.plainText.length,
       signal,
       onDelta: (delta) => {
-        const extracted = extractThinkBlocks(delta.content, partial.inThink);
-        partial.content += extracted.content;
-        partial.inThink = extracted.inThink;
-        partial.reasoning += delta.reasoning ?? '';
-        partial.reasoning += extracted.reasoning;
-        input.onDelta?.({ content: partial.content, reasoning: partial.reasoning });
+        if (delta.content) rawContent += delta.content;
+        if (delta.reasoning) nativeReasoning += delta.reasoning;
+        const extracted = extractThinkBlocks(rawContent);
+        const combinedReasoning = `${nativeReasoning}${nativeReasoning && extracted.reasoning ? '\n\n' : ''}${extracted.reasoning}`;
+        input.onDelta?.({ content: extracted.content, reasoning: combinedReasoning || undefined });
       },
     });
     return { video, transcript, promptId: summaryPrompt.id, content: result.content, reasoning: result.reasoning, createdAt: Date.now() };
@@ -50,43 +50,95 @@ export async function runSummaryPipeline(input: SummaryPipelineInput): Promise<S
 
   const chunkPrompt = getPromptById('chunk_summary')!;
   const mergePrompt = getPromptById('merge_summary')!;
-  const chunkSummaries: string[] = [];
+  const chunkSummaries = Array<string>(chunks.length);
+  let nextChunkIndex = 0;
+  let completedChunks = 0;
+  let chunkFailure = false;
 
-  for (let index = 0; index < chunks.length; index += 1) {
-    onProgress?.(`分块摘要 ${index + 1}/${chunks.length}`);
-    const chunkResult = await ask(textAiClient, config, getPromptTemplate(chunkPrompt, config.summary.language), {
-      video,
-      transcriptText: chunks[index],
-      tokenSourceChars: chunks[index].length,
-      chunkIndex: index + 1,
-      totalChunks: chunks.length,
-      signal,
-      stream: false,
-    });
-    chunkSummaries.push(chunkResult.content);
-    input.onDelta?.({ content: chunkSummaries.join('\n\n---\n\n') });
-  }
+  const summarizeChunk = async (index: number): Promise<string> => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const chunkResult = await ask(textAiClient, config, getPromptTemplate(chunkPrompt, config.summary.language), {
+        video,
+        transcriptText: chunks[index],
+        tokenSourceChars: chunks[index].length,
+        chunkIndex: index + 1,
+        totalChunks: chunks.length,
+        signal,
+        stream: false,
+      });
+      if (chunkResult.content.trim()) return chunkResult.content;
+    }
+    throw new Error(`第 ${index + 1}/${chunks.length} 段未返回摘要内容`);
+  };
+
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      if (chunkFailure) return;
+      if (signal?.aborted) throw signal.reason ?? new DOMException('任务已取消', 'AbortError');
+      const index = nextChunkIndex;
+      nextChunkIndex += 1;
+      if (index >= chunks.length) return;
+      let summary: string;
+      try {
+        summary = await summarizeChunk(index);
+      } catch (error) {
+        chunkFailure = true;
+        throw error;
+      }
+      if (chunkFailure) return;
+      chunkSummaries[index] = summary;
+      completedChunks += 1;
+      onProgress?.(`已完成 ${completedChunks}/${chunks.length} 段字幕摘要`);
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(2, chunks.length) }, () => worker()));
 
   onProgress?.('合并长视频摘要');
-  const partial = { content: '', reasoning: '', inThink: false };
   const chunkSummaryPreview = chunkSummaries.join('\n\n---\n\n');
-  const result = await ask(textAiClient, config, getPromptTemplate(mergePrompt, config.summary.language), {
-    video,
-    transcriptText: transcript.plainText,
-    chunkSummaries: chunkSummaryPreview,
-    tokenSourceChars: chunkSummaryPreview.length,
-    signal,
-    onDelta: (delta) => {
-      const extracted = extractThinkBlocks(delta.content, partial.inThink);
-      partial.content += extracted.content;
-      partial.inThink = extracted.inThink;
-      partial.reasoning += delta.reasoning ?? '';
-      partial.reasoning += extracted.reasoning;
-      input.onDelta?.({ content: partial.content || chunkSummaryPreview, reasoning: partial.reasoning });
-    },
-  });
-
+  let result: { content: string; reasoning?: string } | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (attempt > 0) {
+      onProgress?.('重新合并长视频摘要');
+      // Reset accumulated content so the UI doesn't see the previous attempt's reasoning/content mixed in.
+      input.onDelta?.({ content: '', reasoning: undefined });
+    }
+    let rawContent = '';
+    let nativeReasoning = '';
+    result = await ask(textAiClient, config, getPromptTemplate(mergePrompt, config.summary.language), {
+      video,
+      transcriptText: transcript.plainText,
+      chunkSummaries: chunkSummaryPreview,
+      tokenSourceChars: chunkSummaryPreview.length,
+      signal,
+      onDelta: (delta) => {
+        if (delta.content) rawContent += delta.content;
+        if (delta.reasoning) nativeReasoning += delta.reasoning;
+        const extracted = extractThinkBlocks(rawContent);
+        const combinedReasoning = `${nativeReasoning}${nativeReasoning && extracted.reasoning ? '\n\n' : ''}${extracted.reasoning}`;
+        input.onDelta?.({ content: extracted.content, reasoning: combinedReasoning || undefined });
+      },
+    });
+    if (!isIncompleteMerge(result.content, chunkSummaries)) break;
+  }
+  if (!result || isIncompleteMerge(result.content, chunkSummaries)) {
+    throw new Error('整体摘要合并不完整，请重试');
+  }
   return { video, transcript, promptId: summaryPrompt.id, content: result.content, reasoning: result.reasoning, chunkSummaries, createdAt: Date.now() };
+}
+
+function isIncompleteMerge(mergedContent: string, chunkSummaries: string[]): boolean {
+  const normalizedMerged = normalizeSummaryComparison(mergedContent);
+  if (!normalizedMerged) return true;
+  if (chunkSummaries.length <= 1) return false;
+  if (chunkSummaries.some((chunk) => normalizeSummaryComparison(chunk) === normalizedMerged)) return true;
+  const totalChunks = chunkSummaries.length;
+  return new RegExp(`(?:第\\s*\\d+\\s*\\/\\s*${totalChunks}\\s*段|chunk\\s*\\d+\\s*\\/\\s*${totalChunks})`, 'i')
+    .test(mergedContent);
+}
+
+function normalizeSummaryComparison(value: string): string {
+  return value.toLowerCase().replace(/[\s#*_`>\-[\]()]+/g, '');
 }
 
 async function ask(

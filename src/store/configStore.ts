@@ -8,6 +8,7 @@ export const DEFAULT_CONFIG: LocalConfig = {
     youtube: { captionStrategy: 'auto', apiKey: '', oauthAccessToken: '' },
   },
   textAi: {
+    apiStyle: 'openai',
     apiUrl: 'https://api.minimaxi.com/v1',
     apiKey: '',
     model: 'MiniMax-M3',
@@ -17,6 +18,7 @@ export const DEFAULT_CONFIG: LocalConfig = {
     requestMode: 'auto',
   },
   imageAi: {
+    mode: 'api',
     apiStyle: 'openai_images',
     apiUrl: 'https://api.openai.com/v1/images/generations',
     apiKey: '',
@@ -25,16 +27,17 @@ export const DEFAULT_CONFIG: LocalConfig = {
     quality: 'medium',
     responseFormat: 'b64_json',
     requestMode: 'auto',
+    chatgptConversationUrl: '',
   },
   summary: {
-    autoRun: false,
+    autoRun: true,
     defaultPromptId: 'summary_plain',
     language: 'zh-CN',
     chunkTargetChars: 8000,
     chunkOverlapChars: 500,
     maxChunks: 20,
   },
-  videoInsights: { maxHistoryMessages: 8 },
+  chat: { maxHistoryMessages: 8 },
   ui: {
     language: 'zh-CN',
     position: 'right',
@@ -95,14 +98,21 @@ function mergeConfig(base: LocalConfig, partial: LocalConfig): LocalConfig {
     textAi: pickTextAi({ ...base.textAi, ...partial.textAi }),
     imageAi: pickImageAi({ ...base.imageAi, ...partial.imageAi }),
     summary: { ...base.summary, ...partial.summary },
-    videoInsights: { ...base.videoInsights, ...partial.videoInsights },
+    chat: { ...base.chat, ...partial.chat },
     ui: { ...base.ui, ...partial.ui },
     prompts: { ...base.prompts, ...partial.prompts },
   };
 }
 
+export function mergeConfigForTest(
+  partial: Partial<Omit<LocalConfig, 'imageAi'>> & { imageAi?: Partial<LocalConfig['imageAi']> },
+): LocalConfig {
+  return mergeConfig(DEFAULT_CONFIG, partial as LocalConfig);
+}
+
 function pickTextAi(value: LocalConfig['textAi']): LocalConfig['textAi'] {
   return {
+    apiStyle: value.apiStyle ?? 'openai',
     apiUrl: value.apiUrl,
     apiKey: value.apiKey,
     model: value.model,
@@ -115,6 +125,7 @@ function pickTextAi(value: LocalConfig['textAi']): LocalConfig['textAi'] {
 
 function pickImageAi(value: LocalConfig['imageAi']): LocalConfig['imageAi'] {
   return {
+    mode: value.mode === 'chatgpt_web' ? 'chatgpt_web' : 'api',
     apiStyle: value.apiStyle,
     apiUrl: value.apiUrl,
     apiKey: value.apiKey,
@@ -123,5 +134,6 @@ function pickImageAi(value: LocalConfig['imageAi']): LocalConfig['imageAi'] {
     quality: value.quality,
     responseFormat: value.responseFormat,
     requestMode: 'auto',
+    chatgptConversationUrl: value.chatgptConversationUrl ?? '',
   };
 }

@@ -44,10 +44,18 @@ export function parseYoutubePlayerResponse(raw: unknown, pageUrl: string): Parse
       duration: parseDurationSeconds(response.videoDetails?.lengthSeconds),
       coverUrl,
       publishedAt,
+      stats: countValue(response.videoDetails?.viewCount) === undefined
+        ? undefined
+        : { views: countValue(response.videoDetails?.viewCount) },
       url,
     },
     tracks: parseYoutubeCaptionTracks(response),
   };
+}
+
+function countValue(value: unknown): number | undefined {
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 0 ? count : undefined;
 }
 
 export function parseYoutubeCaptionTracks(response: YoutubePlayerResponse): YoutubeCaptionTrack[] {

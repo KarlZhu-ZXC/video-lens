@@ -193,7 +193,7 @@ Chunk summaries:
   },
   {
     id: 'video_insights_default',
-    name: 'Video Insights',
+    name: 'Summary Chat',
     type: 'video_insights',
     builtIn: true,
     template: `你正在回答用户关于这个视频的问题。请基于摘要和字幕回答，不知道就说不知道。

@@ -22,9 +22,25 @@ export function renderMarkdown(markdown: string): HTMLElement {
 
   const flushCodeFence = () => {
     if (!codeFence) return;
-    root.append(el('pre', { class: 'vs-code-block' }, [
-      codeFence.lang ? el('span', { class: 'vs-code-lang' }, [codeFence.lang]) : '',
-      el('code', {}, [codeFence.lines.join('\n')]),
+    const codeText = codeFence.lines.join('\n');
+    const copyButton = el('button', { class: 'vs-code-copy', title: 'Copy code' }, ['Copy']);
+    copyButton.addEventListener('click', () => {
+      navigator.clipboard.writeText(codeText).then(() => {
+        copyButton.textContent = 'Copied!';
+        setTimeout(() => { copyButton.textContent = 'Copy'; }, 2000);
+      }).catch(() => {});
+    });
+
+    const header = el('div', { class: 'vs-code-header' }, [
+      el('span', { class: 'vs-code-lang' }, [codeFence.lang || 'code']),
+      copyButton
+    ]);
+
+    root.append(el('div', { class: 'vs-code-wrapper' }, [
+      header,
+      el('pre', { class: 'vs-code-block' }, [
+        el('code', {}, [codeText]),
+      ])
     ]));
     codeFence = undefined;
   };

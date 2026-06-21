@@ -77,16 +77,33 @@ export class DirectOpenAIImageClient implements ImageAiClient {
 }
 
 export function parseGeneratedImage(json: any): GeneratedImage {
-  const imageBase64 = firstString(json?.data?.image_base64) ?? firstString(json?.image_base64);
+  if (json?.error) {
+    const msg = typeof json.error === 'string' ? json.error : json.error.message || JSON.stringify(json.error);
+    throw new Error(`API Error: ${msg}`);
+  }
+
+  if (json?.base_resp?.status_code && json.base_resp.status_code !== 0) {
+    throw new Error(`API Error: ${json.base_resp.status_msg || 'Unknown'} (Code: ${json.base_resp.status_code})`);
+  }
+
+  const imageBase64 = firstString(json?.data?.image_base64) ?? firstString(json?.image_base64) ?? firstString(json?.b64_json) ?? firstString(json?.base64);
   if (imageBase64) return { dataUrl: `data:image/png;base64,${imageBase64}`, mimeType: 'image/png', raw: json };
 
+  const url = firstString(json?.data?.url) ?? firstString(json?.url);
+  if (url) return { url, raw: json };
+
   const item = json?.data?.[0];
-  if (!item) throw new Error('No image returned');
+  if (!item) {
+    const payload = JSON.stringify(json).slice(0, 200);
+    throw new Error(`No image returned. Response: ${payload}`);
+  }
+
   if (item.b64_json) return { dataUrl: `data:image/png;base64,${item.b64_json}`, mimeType: 'image/png', raw: json };
   if (item.base64) return { dataUrl: `data:image/png;base64,${item.base64}`, mimeType: 'image/png', raw: json };
   if (item.image_base64) return { dataUrl: `data:image/png;base64,${item.image_base64}`, mimeType: 'image/png', raw: json };
   if (item.url) return { url: item.url, raw: json };
-  throw new Error('Unsupported image response format');
+
+  throw new Error(`Unsupported image response format. Response: ${JSON.stringify(json).slice(0, 200)}`);
 }
 
 export function normalizeImageResponseFormat(

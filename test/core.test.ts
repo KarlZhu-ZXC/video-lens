@@ -2,16 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { chunkText } from '../src/ai/chunking';
 import { normalizeImageResponseFormat, parseGeneratedImage, sanitizeImagePrompt } from '../src/ai/image/DirectOpenAIImageClient';
 import { buildChatCompletionsPayload, normalizeChatCompletionsUrl } from '../src/ai/text/DirectOpenAITextClient';
+import { normalizeAnthropicUrl } from '../src/ai/text/AnthropicTextClient';
 import { applyTextConfig, normalizeApiKey, normalizeOpenAIBaseUrl } from '../src/ai/text/providers';
-import { createOpenAIStreamParser, parseOpenAIStreamDeltas } from '../src/ai/text/streamParser';
+import { createAnthropicStreamParser, createOpenAIStreamParser, parseOpenAIStreamDeltas } from '../src/ai/text/streamParser';
 import type { TextAiClient } from '../src/ai/text/TextAiClient';
+import { bindPanelRendering, TinyEmitter } from '../src/app/events';
 import {
   AppController,
   buildSummaryMarkdown,
+  cacheGeneratedImage,
+  generatedImageHref,
   shouldToastStatus,
   summaryMarkdownFileName,
 } from '../src/app/AppController';
-import { buildOneImagePrompt, runOnePagePipeline } from '../src/onePage/onePagePipeline';
+
 import { BUILT_IN_PROMPTS, getPromptTemplate } from '../src/prompts/defaultPrompts';
 import { renderPrompt } from '../src/prompts/renderPrompt';
 import {
@@ -21,23 +25,47 @@ import {
   stripSensitiveConfigForStorage,
 } from '../src/store/configStore';
 import { CONFIG_KEY } from '../src/store/types';
-import { imageCache } from '../src/store/imageCache';
 import { summaryCache } from '../src/store/summaryCache';
 import { estimateSummaryMaxTokens, runSummaryPipeline } from '../src/summary/summaryPipeline';
+import { askSummaryChat, buildOneImagePrompt, isImageGenerationRequest } from '../src/summary/chatPipeline';
 import { extractThinkBlocks } from '../src/summary/think';
+import {
+  finalizeReasoningTiming,
+  formatReasoningDuration,
+  updateReasoningTiming,
+} from '../src/summary/reasoningTiming';
 import { getStatusText, getUiText } from '../src/ui/i18n';
-import { resolveOneImageStatus } from '../src/ui/oneImageView';
-import { clampPanelWidth, isDocumentFullscreen, panelIconPaths, resolveSummaryScrollTop } from '../src/ui/panel';
+import { reasoningDisclosureState } from '../src/ui/aiResponse';
+import {
+  clampPanelWidth,
+  isDocumentFullscreen,
+  panelIconPaths,
+  resolveSummaryScrollTop,
+  shouldApplySummaryScrollCorrection,
+  SUMMARY_SCROLL_SELECTOR,
+} from '../src/ui/panel';
 import { shouldLeaveSettingsTab } from '../src/ui/panel';
-import { formatTranscriptLanguage, resolveThinkingOpen } from '../src/ui/summaryView';
+import {
+  formatTranscriptLanguage,
+  formatCompactCount,
+  hasRenderableSummaryOutput,
+  FIXED_FOLLOW_UP_INTENTS,
+  selectedSubtitleLabel,
+  shouldShowFollowUpIntents,
+  videoStatItems,
+  shouldShowSummaryToolbar,
+  summaryComposerState,
+  SUMMARY_CONTEXT_ORDER,
+} from '../src/ui/summaryView';
 import { isVideoSummaryHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
 import { CONNECTION_TEST_LABEL, resolveSecretInput, resolveSecretValueForSave } from '../src/ui/settingsModal';
 import { normalizeAssetUrl } from '../src/utils/url';
-import { resolveThinkingPresentation } from '../src/ui/aiResponse';
 import { DEV_HARNESS_COMMAND, HARNESS_ENTRY_SCRIPT } from '../src/harness/constants';
 import { PANEL_STYLES } from '../src/ui/styles';
 import { getActiveProvider, isSupportedVideoUrl } from '../src/sources/providers';
 import { extractYoutubeVideoId, parseYoutubePlayerResponse } from '../src/sources/youtube/videoInfo';
+import { getYoutubeVideoFromOfficialApi } from '../src/sources/youtube/officialApi';
+import { parseBilibiliStats } from '../src/sources/bilibili/videoInfo';
 import {
   buildTargetLanguageTranslatedTracks,
   getYoutubeSubtitleOptions,
@@ -99,6 +127,39 @@ describe('parseOpenAIStreamDeltas', () => {
     expect(parse('data: {"choices":[{"delta":{"content":"Hel')).toEqual([]);
     expect(parse('lo"}}]}\n')).toEqual([{ content: 'Hello', reasoning: '' }]);
   });
+
+  it('accepts SSE data fields without a space after the colon', () => {
+    expect(parseOpenAIStreamDeltas('data:{"choices":[{"delta":{"content":"ok"}}]}')[0]?.content).toBe('ok');
+  });
+});
+
+describe('Anthropic stream parsing', () => {
+  it('parses split text deltas', () => {
+    const parse = createAnthropicStreamParser();
+    expect(parse('data:{"type":"content_block_delta","delta":{"type":"text_')).toEqual([]);
+    expect(parse('delta","text":"hello"}}\n')).toEqual([{ content: 'hello', reasoning: '' }]);
+  });
+});
+
+describe('app event rendering', () => {
+  it('routes structural and streaming changes to separate render callbacks', () => {
+    const events = new TinyEmitter();
+    let stateRenders = 0;
+    let streamRenders = 0;
+    const unbind = bindPanelRendering(
+      events,
+      () => { stateRenders += 1; },
+      () => { streamRenders += 1; },
+    );
+
+    events.emit('statechange');
+    events.emit('streamchange');
+    unbind();
+    events.emit('streamchange');
+
+    expect(stateRenders).toBe(1);
+    expect(streamRenders).toBe(1);
+  });
 });
 
 describe('summary max tokens', () => {
@@ -109,7 +170,7 @@ describe('summary max tokens', () => {
 });
 
 describe('long summary streaming', () => {
-  it('keeps chunk summaries visible while merging long videos', async () => {
+  it('does not publish chunk previews but streams the merge step to the UI', async () => {
     const deltas: Array<{ content: string; reasoning?: string }> = [];
     const client: TextAiClient = {
       async complete(request, options) {
@@ -122,7 +183,7 @@ describe('long summary streaming', () => {
       },
     };
 
-    await runSummaryPipeline({
+    const result = await runSummaryPipeline({
       video: {
         source: 'bilibili',
         sourceId: 'BV-long',
@@ -137,11 +198,195 @@ describe('long summary streaming', () => {
       onDelta: (partial) => deltas.push(partial),
     });
 
-    expect(deltas[0].content).toContain('第一段摘要');
-    expect(deltas[1].content).toContain('第二段摘要');
-    expect(deltas[2].content).toContain('第一段摘要');
-    expect(deltas[2].content).toContain('第二段摘要');
-    expect(deltas[deltas.length - 1]?.content).toBe('# 合并结果');
+    // Chunk previews stay hidden (no deltas with "第一段摘要" / "第二段摘要"), but the merge step streams its deltas.
+    expect(deltas.map((d) => d.content).join('')).toBe('# 合并结果');
+    expect(deltas.some((d) => (d.reasoning ?? '').includes('正在合并'))).toBe(true);
+    expect(result.content).toBe('# 合并结果');
+  });
+
+  it('runs at most two chunk requests concurrently and merges them in source order', async () => {
+    let active = 0;
+    let maxActive = 0;
+    let mergePrompt = '';
+    const progress: string[] = [];
+    const deltas: string[] = [];
+    const client: TextAiClient = {
+      async complete(request) {
+        const content = request.messages[0].content;
+        const chunk = /第 (\d+) \/ 3 段字幕/.exec(content);
+        if (!chunk) {
+          mergePrompt = content;
+          return { content: '合并完成' };
+        }
+        const index = Number(chunk[1]);
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, index === 1 ? 30 : 5));
+        active -= 1;
+        return { content: `第${index}段摘要` };
+      },
+    };
+
+    await runSummaryPipeline({
+      video: { source: 'bilibili', sourceId: 'BV-concurrent', title: '并发', url: 'https://bilibili.com/video/BV-concurrent' },
+      transcript: { plainText: 'a'.repeat(30), lines: [], charCount: 30 },
+      textAiClient: client,
+      config: { ...DEFAULT_CONFIG, summary: { ...DEFAULT_CONFIG.summary, chunkTargetChars: 10, chunkOverlapChars: 0, maxChunks: 3 } },
+      onProgress: (message) => progress.push(message),
+      onDelta: (partial) => deltas.push(partial.content),
+    });
+
+    expect(maxActive).toBe(2);
+    expect(progress).toEqual([
+      '已完成 1/3 段字幕摘要',
+      '已完成 2/3 段字幕摘要',
+      '已完成 3/3 段字幕摘要',
+      '合并长视频摘要',
+    ]);
+    expect(mergePrompt.indexOf('第1段摘要')).toBeLessThan(mergePrompt.indexOf('第2段摘要'));
+    expect(mergePrompt.indexOf('第2段摘要')).toBeLessThan(mergePrompt.indexOf('第3段摘要'));
+    expect(deltas).toEqual([]);
+  });
+
+  it('retries an empty chunk once and rejects a second empty result', async () => {
+    let firstChunkAttempts = 0;
+    const retryingClient: TextAiClient = {
+      async complete(request) {
+        const content = request.messages[0].content;
+        if (content.includes('第 1 / 2 段字幕')) {
+          firstChunkAttempts += 1;
+          return { content: firstChunkAttempts === 1 ? '  ' : '第一段摘要' };
+        }
+        if (content.includes('第 2 / 2 段字幕')) return { content: '第二段摘要' };
+        return { content: '合并摘要' };
+      },
+    };
+    const input = {
+      video: { source: 'bilibili' as const, sourceId: 'BV-retry', title: '重试', url: 'https://bilibili.com/video/BV-retry' },
+      transcript: { plainText: 'a'.repeat(20), lines: [], charCount: 20 },
+      config: { ...DEFAULT_CONFIG, summary: { ...DEFAULT_CONFIG.summary, chunkTargetChars: 10, chunkOverlapChars: 0, maxChunks: 2 } },
+    };
+
+    await expect(runSummaryPipeline({ ...input, textAiClient: retryingClient })).resolves.toMatchObject({
+      content: '合并摘要',
+    });
+    expect(firstChunkAttempts).toBe(2);
+
+    const emptyClient: TextAiClient = {
+      async complete(request) {
+        return request.messages[0].content.includes('第 1 / 2 段字幕')
+          ? { content: '' }
+          : { content: '第二段摘要' };
+      },
+    };
+    await expect(runSummaryPipeline({ ...input, textAiClient: emptyClient })).rejects.toThrow(
+      '第 1/2 段未返回摘要内容',
+    );
+  });
+
+  it('retries an incomplete merge and returns only the complete overall summary', async () => {
+    let mergeAttempts = 0;
+    const client: TextAiClient = {
+      async complete(request) {
+        const content = request.messages[0].content;
+        if (content.includes('第 1 / 2 段字幕')) return { content: '第一段摘要' };
+        if (content.includes('第 2 / 2 段字幕')) return { content: '第二段摘要' };
+        mergeAttempts += 1;
+        return { content: mergeAttempts === 1 ? '第 1/2 段字幕内容总结：第一段摘要' : '完整整体摘要' };
+      },
+    };
+    const result = await runSummaryPipeline({
+      video: { source: 'bilibili', sourceId: 'BV-fallback', title: '回退', url: 'https://bilibili.com/video/BV-fallback' },
+      transcript: { plainText: 'a'.repeat(20), lines: [], charCount: 20 },
+      textAiClient: client,
+      config: { ...DEFAULT_CONFIG, summary: { ...DEFAULT_CONFIG.summary, chunkTargetChars: 10, chunkOverlapChars: 0, maxChunks: 2 } },
+    });
+
+    expect(mergeAttempts).toBe(2);
+    expect(result.content).toBe('完整整体摘要');
+  });
+
+  it('resets the streaming surface between merge retries so old reasoning does not leak in', async () => {
+    let mergeAttempts = 0;
+    const deltas: Array<{ content: string; reasoning?: string }> = [];
+    const client: TextAiClient = {
+      async complete(request, options) {
+        const content = request.messages[0].content;
+        if (content.includes('第 1 / 2 段字幕')) return { content: '第一段摘要' };
+        if (content.includes('第 2 / 2 段字幕')) return { content: '第二段摘要' };
+        mergeAttempts += 1;
+        // First attempt mimics an incomplete merge (echoes a chunk verbatim) so isIncompleteMerge triggers retry.
+        const responseContent = mergeAttempts === 1 ? '第 1/2 段字幕内容总结：第一段摘要' : '完整整体摘要';
+        request.stream && options?.onDelta?.({
+          content: responseContent,
+          reasoning: mergeAttempts === 1 ? '第一轮思路' : undefined,
+        });
+        return { content: responseContent };
+      },
+    };
+
+    await runSummaryPipeline({
+      video: { source: 'bilibili', sourceId: 'BV-merge-retry', title: '回退', url: 'https://bilibili.com/video/BV-merge-retry' },
+      transcript: { plainText: 'a'.repeat(20), lines: [], charCount: 20 },
+      textAiClient: client,
+      config: { ...DEFAULT_CONFIG, summary: { ...DEFAULT_CONFIG.summary, chunkTargetChars: 10, chunkOverlapChars: 0, maxChunks: 2 } },
+      onDelta: (partial) => deltas.push(partial),
+    });
+
+    // Reset is the empty delta emitted between the first attempt's content and the second attempt's content.
+    const resetIndex = deltas.findIndex((d) => d.content === '' && d.reasoning === undefined);
+    expect(resetIndex).toBeGreaterThanOrEqual(0);
+    expect(deltas.slice(0, resetIndex).map((d) => d.content).join('')).toBe('第 1/2 段字幕内容总结：第一段摘要');
+    // After the reset, only the second attempt's content should be visible.
+    expect(deltas.slice(resetIndex + 1).map((d) => d.content).join('')).toBe('完整整体摘要');
+    expect(deltas.slice(resetIndex + 1).some((d) => (d.reasoning ?? '').includes('第一轮思路'))).toBe(false);
+  });
+
+  it('fails instead of rendering chunks when both overall merges are incomplete', async () => {
+    const client: TextAiClient = {
+      async complete(request) {
+        const content = request.messages[0].content;
+        if (content.includes('第 1 / 2 段字幕')) return { content: '第一段摘要' };
+        if (content.includes('第 2 / 2 段字幕')) return { content: '第二段摘要' };
+        return { content: '第 1/2 段字幕内容总结：第一段摘要' };
+      },
+    };
+
+    await expect(runSummaryPipeline({
+      video: { source: 'bilibili', sourceId: 'BV-merge-fail', title: '合并失败', url: 'https://bilibili.com/video/BV-merge-fail' },
+      transcript: { plainText: 'a'.repeat(20), lines: [], charCount: 20 },
+      textAiClient: client,
+      config: { ...DEFAULT_CONFIG, summary: { ...DEFAULT_CONFIG.summary, chunkTargetChars: 10, chunkOverlapChars: 0, maxChunks: 2 } },
+    })).rejects.toThrow('整体摘要合并不完整');
+  });
+
+  it('does not publish late sibling results after a concurrent chunk fails', async () => {
+    const deltas: string[] = [];
+    const progress: string[] = [];
+    const client: TextAiClient = {
+      async complete(request) {
+        const content = request.messages[0].content;
+        if (content.includes('第 1 / 2 段字幕')) throw new Error('chunk failed');
+        if (content.includes('第 2 / 2 段字幕')) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return { content: '迟到的第二段' };
+        }
+        return { content: '不应合并' };
+      },
+    };
+
+    await expect(runSummaryPipeline({
+      video: { source: 'bilibili', sourceId: 'BV-fail-fast', title: '失败', url: 'https://bilibili.com/video/BV-fail-fast' },
+      transcript: { plainText: 'a'.repeat(20), lines: [], charCount: 20 },
+      textAiClient: client,
+      config: { ...DEFAULT_CONFIG, summary: { ...DEFAULT_CONFIG.summary, chunkTargetChars: 10, chunkOverlapChars: 0, maxChunks: 2 } },
+      onDelta: (partial) => deltas.push(partial.content),
+      onProgress: (message) => progress.push(message),
+    })).rejects.toThrow('chunk failed');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(deltas).toEqual([]);
+    expect(progress).toEqual([]);
   });
 });
 
@@ -151,6 +396,24 @@ describe('video source providers', () => {
     expect(getActiveProvider('https://www.youtube.com/watch?v=dQw4w9WgXcQ').name).toBe('youtube');
     expect(getActiveProvider('https://www.youtube.com/shorts/abc123xyz90').name).toBe('youtube');
     expect(isSupportedVideoUrl('https://www.youtube.com/feed/subscriptions')).toBe(false);
+  });
+
+  it('maps available Bilibili engagement statistics', () => {
+    expect(parseBilibiliStats({
+      view: 123_456,
+      danmaku: 7_890,
+      reply: 456,
+      like: 12_345,
+      coin: 6_789,
+      favorite: 9_876,
+    })).toEqual({
+      views: 123_456,
+      danmaku: 7_890,
+      comments: 456,
+      likes: 12_345,
+      coins: 6_789,
+      favorites: 9_876,
+    });
   });
 });
 
@@ -170,6 +433,7 @@ describe('YouTube source parsing', () => {
           author: 'Creator Name',
           shortDescription: 'Description',
           lengthSeconds: '123',
+          viewCount: '123456',
           thumbnail: { thumbnails: [{ url: 'small.jpg' }, { url: 'large.jpg' }] },
         },
         microformat: {
@@ -200,8 +464,37 @@ describe('YouTube source parsing', () => {
     expect(parsed.video.creatorName).toBe('Creator Name');
     expect(parsed.video.duration).toBe(123);
     expect(parsed.video.coverUrl).toBe('large.jpg');
+    expect(parsed.video.stats).toEqual({ views: 123_456 });
     expect(parsed.tracks.map((track) => track.id)).toEqual(['en', 'zh-Hans']);
     expect(parsed.tracks[1].label).toBe('Chinese (auto)');
+  });
+
+  it('maps statistics returned by the configured YouTube official API', async () => {
+    const originalFetch = globalThis.fetch;
+    let requestedUrl = '';
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify({
+        items: [{
+          id: 'yt-stats',
+          snippet: { title: 'Stats', channelTitle: 'Creator' },
+          contentDetails: { duration: 'PT1M' },
+          statistics: { viewCount: '1000', likeCount: '200', commentCount: '30' },
+        }],
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    const video = await getYoutubeVideoFromOfficialApi('yt-stats', {
+      ...DEFAULT_CONFIG,
+      source: {
+        ...DEFAULT_CONFIG.source,
+        youtube: { ...DEFAULT_CONFIG.source.youtube, captionStrategy: 'auto', apiKey: 'test-key' },
+      },
+    });
+
+    expect(new URL(requestedUrl).searchParams.get('part')).toContain('statistics');
+    expect(video?.stats).toEqual({ views: 1000, likes: 200, comments: 30 });
+    globalThis.fetch = originalFetch;
   });
 
   it('parses JSON3 captions into timestamped transcript lines', () => {
@@ -417,42 +710,81 @@ describe('extractThinkBlocks', () => {
   });
 });
 
-describe('summary thinking panel', () => {
-  it('does not reopen during streaming after the user collapses it', () => {
-    expect(resolveThinkingOpen(true, false)).toBe(false);
-  });
-
-  it('defaults to open during streaming before the user changes it', () => {
-    expect(resolveThinkingOpen(true, undefined)).toBe(true);
-  });
-
-  it('collapses after streaming completes even if the user opened it during streaming', () => {
-    expect(resolveThinkingOpen(false, true)).toBe(false);
-  });
-
-  it('shows only an inline thinking status before visible content streams', () => {
-    expect(resolveThinkingPresentation('模型正在分析结构', false, true)).toEqual({
-      mode: 'active-inline',
-      text: '模型正在分析结构',
+describe('reasoning timing', () => {
+  it('starts on reasoning and stops on the first visible content', () => {
+    expect(updateReasoningTiming({}, { reasoning: '分析' }, 1_000)).toEqual({
+      reasoningStartedAt: 1_000,
     });
+    expect(updateReasoningTiming(
+      { reasoningStartedAt: 1_000 },
+      { reasoning: '继续分析' },
+      2_000,
+    )).toEqual({ reasoningStartedAt: 1_000 });
+    expect(updateReasoningTiming(
+      { reasoningStartedAt: 1_000 },
+      { content: '正文' },
+      4_500,
+    )).toEqual({ reasoningStartedAt: 1_000, reasoningDurationMs: 3_500 });
   });
 
-  it('hides thinking once visible content starts streaming', () => {
-    expect(resolveThinkingPresentation('模型正在分析结构', true, true)).toEqual({
-      mode: 'hidden',
-      text: '',
+  it('finalizes reasoning-only requests and formats their duration', () => {
+    expect(finalizeReasoningTiming({ reasoningStartedAt: 2_000 }, 99_000)).toEqual({
+      reasoningStartedAt: 2_000,
+      reasoningDurationMs: 97_000,
     });
+    expect(formatReasoningDuration(97_000)).toBe('1m 37s');
+    expect(formatReasoningDuration(400)).toBe('<1s');
   });
 
-  it('collapses thinking after streaming completes', () => {
-    expect(resolveThinkingPresentation('模型正在分析结构', true, false)).toEqual({
-      mode: 'complete-collapsed',
-      text: '模型正在分析结构',
+  it('only returns timing fields so spreading does not clobber streaming summary fields', () => {
+    const polluted = {
+      content: 'stale content',
+      reasoning: 'stale reasoning',
+      createdAt: 0,
+      reasoningStartedAt: 1_000,
+    };
+    const timing = updateReasoningTiming(polluted, { content: 'fresh' }, 2_000);
+    expect(timing).toEqual({ reasoningStartedAt: 1_000, reasoningDurationMs: 1_000 });
+    expect('content' in timing).toBe(false);
+    expect('reasoning' in timing).toBe(false);
+
+    const next = { content: 'fresh content', reasoning: 'fresh reasoning', createdAt: 9, ...timing };
+    expect(next.content).toBe('fresh content');
+    expect(next.reasoning).toBe('fresh reasoning');
+    expect(next.createdAt).toBe(9);
+    expect(next.reasoningStartedAt).toBe(1_000);
+    expect(next.reasoningDurationMs).toBe(1_000);
+
+    const finalized = finalizeReasoningTiming(polluted, 5_000);
+    expect(finalized).toEqual({ reasoningStartedAt: 1_000, reasoningDurationMs: 4_000 });
+    expect('content' in finalized).toBe(false);
+  });
+});
+
+describe('reasoning disclosure', () => {
+  it('expands while thinking and collapses to a timed label when complete', () => {
+    expect(reasoningDisclosureState({ reasoning: '', streaming: true })).toEqual({ visible: false });
+    expect(reasoningDisclosureState({ reasoning: '分析中', streaming: true })).toEqual({
+      visible: true,
+      open: true,
+      label: 'Thinking',
+    });
+    expect(reasoningDisclosureState({
+      reasoning: '分析完成',
+      streaming: false,
+      durationMs: 3_400,
+    })).toEqual({
+      visible: true,
+      open: false,
+      label: 'Thought for 3s',
     });
   });
 });
 
 describe('summary scroll preservation', () => {
+  it('tracks the full conversation scroll container', () => {
+    expect(SUMMARY_SCROLL_SELECTOR).toBe('.vs-summary-scroll');
+  });
   it('keeps the previous manual scroll position while streaming re-renders', () => {
     expect(resolveSummaryScrollTop(false, 240, 1000)).toBe(240);
   });
@@ -461,9 +793,98 @@ describe('summary scroll preservation', () => {
     expect(resolveSummaryScrollTop(true, 240, 1000)).toBe(1000);
   });
 
+  it('rejects stale or user-invalidated next-frame scroll corrections', () => {
+    expect(shouldApplySummaryScrollCorrection(2, 1, true, true)).toBe(false);
+    expect(shouldApplySummaryScrollCorrection(2, 2, false, true)).toBe(false);
+    expect(shouldApplySummaryScrollCorrection(2, 2, true, false)).toBe(false);
+    expect(shouldApplySummaryScrollCorrection(2, 2, true, true)).toBe(true);
+  });
+
   it('lets the summary output frame fill the remaining panel height even when empty', () => {
     expect(PANEL_STYLES).toContain('.vs-summary-scroll {\n  display: flex;');
     expect(PANEL_STYLES).toContain('.vs-output {\n  flex: 1 1 auto;');
+  });
+
+  it('uses the composer surface for user bubbles and removes assistant avatars', () => {
+    const userRule = /\.vs-message\.user > p \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    const composerRule = /\.vs-chat-composer \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    expect(userRule).toContain('background: var(--vs-surface-highest);');
+    expect(composerRule).toContain('background: var(--vs-surface-highest);');
+    expect(PANEL_STYLES).not.toContain('.vs-avatar {');
+  });
+
+  it('styles reasoning separation and fixed intent shortcuts', () => {
+    const thinkingRule = /\.vs-thinking \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    expect(thinkingRule).toContain('border-bottom: 1px solid var(--vs-outline-variant);');
+    expect(PANEL_STYLES).toContain('.vs-intent-suggestions {');
+    expect(PANEL_STYLES).toContain('.vs-intent-option {');
+  });
+
+  it('centers assistant placeholder content and compacts configuration controls', () => {
+    const assistantRule = /\.vs-message\.assistant \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    const chipRule = /\.vs-config-chip \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    const subtitleRule = /\.vs-subtitle-chip \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    expect(assistantRule).toContain('width: 100%;');
+    expect(chipRule).toContain('min-height: 26px;');
+    expect(subtitleRule).toContain('width: auto;');
+    expect(subtitleRule).toContain('max-width: min(170px, 40%);');
+  });
+
+  it('uses a four-column video description grid with a narrow two-column fallback', () => {
+    const metaRule = /\.vs-video-meta \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    expect(metaRule).toContain('display: grid;');
+    expect(metaRule).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));');
+    expect(PANEL_STYLES).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+  });
+
+  it('uses white chip and intent text without a visible intent heading', () => {
+    const chipTextRule = /\.vs-config-chip span \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    const intentRule = /\.vs-intent-option \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    expect(chipTextRule).toContain('color: var(--vs-text);');
+    expect(PANEL_STYLES).toContain('.vs-subtitle-chip select {');
+    expect(intentRule).toContain('color: var(--vs-text);');
+    expect(PANEL_STYLES).not.toContain('.vs-intent-label {');
+  });
+});
+
+describe('summary chat UI states', () => {
+  it('treats reasoning-only streaming output as renderable summary content', () => {
+    expect(hasRenderableSummaryOutput({ content: '', reasoning: '正在分析' })).toBe(true);
+    expect(hasRenderableSummaryOutput({ content: '', reasoning: '' })).toBe(false);
+  });
+
+  it('turns the empty composer into a start-summary control', () => {
+    expect(summaryComposerState({ hasSummary: false, busy: false })).toEqual({
+      textareaDisabled: true,
+      placeholder: '请先生成总结',
+      action: 'start_summary',
+      label: '开始总结',
+    });
+    expect(summaryComposerState({ hasSummary: true, busy: false })).toEqual({
+      textareaDisabled: false,
+      placeholder: '问问关于视频的内容... 或输入"画图"',
+      action: 'send',
+      label: '发送',
+    });
+  });
+
+  it('shows tools only for a completed summary and fixes context above chat in the requested order', () => {
+    expect(shouldShowSummaryToolbar({ hasSummary: false, streaming: false })).toBe(false);
+    expect(shouldShowSummaryToolbar({ hasSummary: false, streaming: true })).toBe(false);
+    expect(shouldShowSummaryToolbar({ hasSummary: true, streaming: false })).toBe(true);
+    expect(SUMMARY_CONTEXT_ORDER).toEqual(['video', 'configuration']);
+  });
+
+  it('offers fixed intents only on the latest completed assistant response', () => {
+    expect(FIXED_FOLLOW_UP_INTENTS.map((item) => item.label)).toEqual([
+      '提炼核心观点',
+      '列出行动建议',
+      '生成配图',
+    ]);
+    expect(shouldShowFollowUpIntents({ busy: false, isLatestAssistant: true, streaming: false })).toBe(true);
+    expect(shouldShowFollowUpIntents({ busy: true, isLatestAssistant: true, streaming: false })).toBe(false);
+    expect(shouldShowFollowUpIntents({ busy: false, isLatestAssistant: false, streaming: false })).toBe(false);
+    expect(shouldShowFollowUpIntents({ busy: false, isLatestAssistant: true, streaming: true })).toBe(false);
   });
 });
 
@@ -503,6 +924,7 @@ describe('normalizeChatCompletionsUrl', () => {
 describe('OpenAI-compatible text config', () => {
   it('saves an arbitrary OpenAI-compatible connection without provider defaults', () => {
     const config = applyTextConfig(DEFAULT_CONFIG.textAi, {
+      apiStyle: 'openai',
       baseUrl: 'https://llm.example.com/openai/v1/chat/completions',
       apiKey: 'Bearer custom-key',
       model: 'my-custom-model',
@@ -557,95 +979,60 @@ describe('OpenAI-compatible text config', () => {
 
 });
 
-describe('one page regeneration', () => {
-  it('builds the image request from the fixed userscript prompt and text summary', () => {
-    expect(buildOneImagePrompt('核心总结')).toBe(
-      '根据以下视频内容总结，生成一张信息可视化的精美配图，风格清晰美观，适合作为视频总结的封面图：\n\n核心总结',
-    );
+describe('Anthropic text config', () => {
+  it('expands an Anthropic host or v1 base URL to the messages endpoint', () => {
+    expect(normalizeAnthropicUrl('https://api.anthropic.com')).toBe('https://api.anthropic.com/v1/messages');
+    expect(normalizeAnthropicUrl('https://api.anthropic.com/v1')).toBe('https://api.anthropic.com/v1/messages');
+    expect(normalizeAnthropicUrl('https://proxy.example/v1/messages')).toBe('https://proxy.example/v1/messages');
   });
+});
 
-  it('sends the fixed prompt directly to the image model', async () => {
-    const data = new Map<string, string>();
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      value: {
-        getItem: (key: string) => data.get(key) ?? null,
-        setItem: (key: string, value: string) => data.set(key, value),
-      },
-    });
-    let requestPrompt = '';
-    const imageAiClient = {
-      async generateImage(request: { prompt: string }) {
-        requestPrompt = request.prompt;
-        return { dataUrl: 'data:image/png;base64,dGVzdA==' };
+describe('summary chat', () => {
+  it('does not duplicate the current user question in history and the rendered prompt', async () => {
+    let messages: Array<{ role: string; content: string }> = [];
+    const client: TextAiClient = {
+      async complete(request) {
+        messages = request.messages;
+        return { content: '回答' };
       },
     };
-
-    const result = await runOnePagePipeline({
-      summary: {
-        video: {
-          source: 'bilibili',
-          sourceId: 'BV-one',
-          bvid: 'BV-one',
-          cid: 1,
-          title: 'B站视频',
-          upName: 'UP主A',
-          url: 'https://www.bilibili.com/video/BV-one',
-        },
-        transcript: { plainText: '字幕', lines: [], charCount: 2 },
-        promptId: DEFAULT_CONFIG.summary.defaultPromptId,
-        content: '摘要',
-        createdAt: Date.now(),
-      },
-      imageAiClient,
-      config: DEFAULT_CONFIG,
-      force: true,
-    });
-
-    expect(requestPrompt).toBe(buildOneImagePrompt('摘要'));
-    expect(result.generatedImage.dataUrl).toBe('data:image/png;base64,dGVzdA==');
-  });
-
-  it('reuses cached images and bypasses the cache when regeneration is forced', async () => {
-    const data = new Map<string, string>();
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      value: {
-        getItem: (key: string) => data.get(key) ?? null,
-        setItem: (key: string, value: string) => data.set(key, value),
-      },
-    });
     const summary = {
-      video: {
-        source: 'bilibili' as const,
-        sourceId: 'BV-force',
-        bvid: 'BV-force',
-        cid: 1,
-        title: '强制重新生成',
-        url: 'https://www.bilibili.com/video/BV-force',
-      },
+      video: { source: 'bilibili' as const, sourceId: 'BV-chat', title: '测试', url: 'https://bilibili.com/video/BV-chat' },
       transcript: { plainText: '字幕', lines: [], charCount: 2 },
       promptId: DEFAULT_CONFIG.summary.defaultPromptId,
       content: '摘要',
       createdAt: Date.now(),
     };
-    let calls = 0;
-    const imageAiClient = {
-      async generateImage() {
-        calls += 1;
-        return { dataUrl: `data:image/png;base64,${calls}` };
-      },
-    };
 
-    await runOnePagePipeline({ summary, imageAiClient, config: DEFAULT_CONFIG });
-    await runOnePagePipeline({ summary, imageAiClient, config: DEFAULT_CONFIG });
-    const forced = await runOnePagePipeline({ summary, imageAiClient, config: DEFAULT_CONFIG, force: true });
+    await askSummaryChat(client, DEFAULT_CONFIG, summary, [
+      { role: 'user', content: '之前的问题' },
+      { role: 'assistant', content: '之前的回答' },
+      { role: 'user', content: '当前问题' },
+    ], '当前问题');
 
-    expect(forced.generatedImage.dataUrl).toBe('data:image/png;base64,2');
-    expect(calls).toBe(2);
-    imageCache.clear();
+    expect(messages.filter((message) => message.content.includes('当前问题'))).toHaveLength(1);
+  });
+
+  it('detects image requests locally and always builds the fixed summary prompt', () => {
+    expect(isImageGenerationRequest('请根据这个视频画一张图')).toBe(true);
+    expect(isImageGenerationRequest('画一个苹果')).toBe(true);
+    expect(isImageGenerationRequest('生成配图')).toBe(true);
+    expect(isImageGenerationRequest('这段视频是什么意思')).toBe(false);
+    expect(buildOneImagePrompt('核心摘要')).toBe(
+      '根据以下视频内容总结，生成一张信息可视化的精美配图，风格清晰美观，适合作为视频总结的封面图：\n\n核心摘要',
+    );
+  });
+
+  it('does not discard a generated image when cache storage is full', () => {
+    expect(() => cacheGeneratedImage(
+      { set: () => { throw new Error('quota exceeded'); } },
+      'cache-key',
+      { dataUrl: 'data:image/png;base64,abc' },
+      'prompt',
+    )).not.toThrow();
   });
 });
+
 
 describe('image generation client helpers', () => {
   it('maps OpenAI b64_json response format to MiniMax base64', () => {
@@ -663,89 +1050,28 @@ describe('image generation client helpers', () => {
   it('keeps image prompts under the provider-safe limit', () => {
     expect(sanitizeImagePrompt('a'.repeat(1600)).length).toBe(1200);
   });
-});
 
-describe('one image status', () => {
-  it('does not show stale follow-up status on the one image page', () => {
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      value: {
-        getItem: () => null,
-        setItem: () => undefined,
-      },
-    });
-    const controller = new AppController();
-    controller.state.status = '已回答';
-
-    expect(resolveOneImageStatus(controller)).toBe('等待生成一图流');
+  it('prefers embedded image data when downloading generated images', () => {
+    expect(generatedImageHref({ dataUrl: 'data:image/png;base64,abc', url: 'https://example.com/image.png' })).toBe(
+      'data:image/png;base64,abc',
+    );
+    expect(generatedImageHref({ url: 'https://example.com/image.png' })).toBe('https://example.com/image.png');
   });
 });
 
-describe('AppController one page generation', () => {
-  it('does not auto-regenerate a summary when one page is requested without a summary', async () => {
-    const data = new Map<string, string>();
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      value: {
-        getItem: (key: string) => data.get(key) ?? null,
-        setItem: (key: string, value: string) => data.set(key, value),
-      },
-    });
-    const controller = new AppController();
-    controller.state.video = {
-      source: 'bilibili',
-      sourceId: 'BV-empty',
-      bvid: 'BV-empty',
-      cid: 1,
-      title: '空缓存视频',
-      url: 'https://www.bilibili.com/video/BV-empty',
-    };
-    let summaryCalls = 0;
-    controller.generateSummary = async () => {
-      summaryCalls += 1;
-    };
 
-    await controller.generateOnePage();
 
-    expect(summaryCalls).toBe(0);
-    expect(controller.state.status).toBe('请先生成摘要');
-  });
-
-  it('restores a summary from cache before generating one page', async () => {
-    const data = new Map<string, string>();
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      value: {
-        getItem: (key: string) => data.get(key) ?? null,
-        setItem: (key: string, value: string) => data.set(key, value),
-      },
-    });
-    const controller = new AppController();
-    controller.state.video = {
-      source: 'bilibili',
-      sourceId: 'BV-cache',
-      bvid: 'BV-cache',
-      cid: 1,
-      title: '缓存视频',
-      url: 'https://www.bilibili.com/video/BV-cache',
-    };
-    summaryCache.set('legacy-cache-key', {
-      video: controller.state.video,
-      transcript: { plainText: '字幕', lines: [], charCount: 2 },
-      promptId: DEFAULT_CONFIG.summary.defaultPromptId,
-      content: '缓存摘要',
-      createdAt: Date.now(),
-    });
-
-    const restored = await (controller as any).restoreCachedSummary();
-
-    expect(restored).toBe(true);
-    expect(controller.state.summary?.content).toBe('缓存摘要');
-  });
-});
 
 describe('AppController video refresh', () => {
   it('retries briefly when SPA navigation still exposes stale video info', async () => {
+    const data = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
     Object.defineProperty(globalThis, 'location', {
       configurable: true,
       value: { href: 'https://www.youtube.com/watch?v=new-video' },
@@ -786,6 +1112,14 @@ describe('AppController video refresh', () => {
 
 describe('AppController cache management and clipboard', () => {
   it('restores a cached summary before generating on launcher open', async () => {
+    const data = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
     const controller = new AppController();
     controller.config = { ...DEFAULT_CONFIG, ui: { ...DEFAULT_CONFIG.ui, collapsed: true } };
     const restore = vi.spyOn(controller, 'restoreCachedSummary').mockResolvedValue(true);
@@ -799,6 +1133,14 @@ describe('AppController cache management and clipboard', () => {
   });
 
   it('includes source, language, and subtitle id in summary cache keys', () => {
+    const data = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
     const controller = new AppController();
     const baseVideo = {
       source: 'youtube' as const,
@@ -844,13 +1186,92 @@ describe('AppController cache management and clipboard', () => {
       content: '缓存摘要',
       createdAt: Date.now(),
     };
+    controller.state.summaryChatHistory = [{ role: 'user', content: '旧问题' }];
+    controller.state.streamingSummaryInsight = { role: 'assistant', content: '旧回答' };
     summaryCache.set((controller as any).summaryCacheKey(controller.state.video.sourceId), controller.state.summary);
 
     controller.clearCurrentSummaryCache();
 
     expect(controller.state.summary).toBeUndefined();
+    expect(controller.state.summaryChatHistory).toEqual([]);
+    expect(controller.state.streamingSummaryInsight).toBeUndefined();
     expect(summaryCache.get((controller as any).summaryCacheKey('BV-clear'))).toBeUndefined();
     expect(controller.state.status).toBe('已清除此视频缓存');
+  });
+
+  it('clears transient chat output when a task fails', async () => {
+    const controller = new AppController();
+    controller.state.streamingSummaryInsight = { role: 'assistant', content: 'partial' };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await (controller as any).runTask('chat', async () => { throw new Error('boom'); });
+
+    expect(controller.state.streamingSummaryInsight).toBeUndefined();
+    consoleError.mockRestore();
+  });
+
+  it('shows a top toast for task errors that do not contain failure keywords', async () => {
+    const data = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+    const controller = new AppController();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await (controller as any).runTask('获取字幕', async () => {
+      throw new Error('当前视频没有公开字幕');
+    });
+
+    expect(controller.state.status).toBe('当前视频没有公开字幕');
+    expect(controller.state.toast?.message).toBe('当前视频没有公开字幕');
+    consoleError.mockRestore();
+  });
+
+  it('shows ChatGPT image bridge failures in both the conversation and top toast', async () => {
+    const data = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+    Object.defineProperty(globalThis, 'GM_addValueChangeListener', { configurable: true, value: undefined });
+    const controller = new AppController();
+    controller.config = {
+      ...controller.config,
+      imageAi: {
+        ...controller.config.imageAi,
+        mode: 'chatgpt_web',
+        chatgptConversationUrl: 'https://chatgpt.com/g/g-p-test/project',
+      },
+    };
+    controller.state.video = {
+      source: 'bilibili',
+      sourceId: 'BV-image-error',
+      bvid: 'BV-image-error',
+      cid: 1,
+      title: 'Image Error',
+      url: 'https://www.bilibili.com/video/BV-image-error',
+    };
+    controller.state.summary = {
+      video: controller.state.video,
+      transcript: { plainText: '字幕', lines: [], charCount: 2 },
+      promptId: controller.config.summary.defaultPromptId,
+      content: '唯一的生图失败测试摘要',
+      createdAt: Date.now(),
+    };
+
+    await controller.askSummaryQuestion('生图');
+
+    const message = controller.state.summaryChatHistory[controller.state.summaryChatHistory.length - 1]?.content ?? '';
+    expect(message).toContain('生成图片失败');
+    expect(message).toContain('GM_addValueChangeListener');
+    expect(controller.state.toast?.message).toBe(message);
   });
 
   it('reports clipboard write failures instead of claiming success', async () => {
@@ -1005,6 +1426,15 @@ describe('summary transcript language label', () => {
     expect(formatTranscriptLanguage(undefined)).toBe('字幕：未读取');
   });
 
+  it('shows the newly selected subtitle option before regeneration', () => {
+    const options = [
+      { id: 'zh', label: '中文', languageCode: 'zh' },
+      { id: 'en', label: 'English', languageCode: 'en' },
+    ];
+    expect(selectedSubtitleLabel(options, 'en', { language: '中文' })).toBe('English');
+    expect(selectedSubtitleLabel(options, 'missing', { language: '中文' })).toBe('中文');
+  });
+
   it('clears the previous subtitle selection when summary language changes', () => {
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
@@ -1030,12 +1460,29 @@ describe('summary transcript language label', () => {
   });
 });
 
-describe('video insights chat styling', () => {
-  it('only styles direct message paragraphs as chat bubbles', () => {
-    expect(PANEL_STYLES).toContain('.vs-message > p');
-    expect(PANEL_STYLES).toContain('.vs-message.assistant > p');
-    expect(PANEL_STYLES).not.toContain('.vs-message p {');
-    expect(PANEL_STYLES).not.toContain('.vs-message.assistant p {');
+describe('video statistics presentation', () => {
+  it('formats compact counts for Chinese and English interfaces', () => {
+    expect(formatCompactCount(9_876, 'zh-CN')).toBe('9876');
+    expect(formatCompactCount(12_300, 'zh-CN')).toBe('1.2万');
+    expect(formatCompactCount(123_000_000, 'zh-CN')).toBe('1.2亿');
+    expect(formatCompactCount(12_300, 'en-US')).toBe('12.3K');
+  });
+
+  it('orders available stats and omits invalid values', () => {
+    expect(videoStatItems({
+      favorites: 600,
+      views: 100,
+      danmaku: 200,
+      comments: Number.NaN,
+      likes: 400,
+      coins: 500,
+    }, 'zh-CN').map((item) => item.key)).toEqual([
+      'views',
+      'danmaku',
+      'likes',
+      'coins',
+      'favorites',
+    ]);
   });
 });
 
@@ -1107,8 +1554,6 @@ describe('toast notifications', () => {
 describe('panel navigation icons', () => {
   it('uses inline svg paths for navigation and collapse controls', () => {
     expect(panelIconPaths('summary')).toHaveLength(5);
-    expect(panelIconPaths('videoInsights')).toHaveLength(2);
-    expect(panelIconPaths('oneImage')).toHaveLength(3);
     expect(panelIconPaths('settings')).toHaveLength(2);
     expect(panelIconPaths('collapse')).toHaveLength(2);
   });

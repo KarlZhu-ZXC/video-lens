@@ -21,11 +21,12 @@ export function normalizeApiKey(input: string): string {
 
 export function applyTextConfig(
   current: LocalConfig['textAi'],
-  input: { baseUrl: string; apiKey: string; model: string },
+  input: { apiStyle: 'openai' | 'anthropic'; baseUrl: string; apiKey: string; model: string },
 ): LocalConfig['textAi'] {
   return {
     ...current,
-    apiUrl: normalizeOpenAIBaseUrl(input.baseUrl),
+    apiStyle: input.apiStyle,
+    apiUrl: input.apiStyle === 'openai' ? normalizeOpenAIBaseUrl(input.baseUrl) : input.baseUrl.trim(),
     apiKey: normalizeApiKey(input.apiKey),
     model: input.model.trim(),
     requestMode: 'auto',

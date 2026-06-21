@@ -5,6 +5,10 @@ export interface ImageGenerationRequest {
   quality?: string;
   responseFormat?: 'url' | 'b64_json' | 'auto';
   n?: number;
+  context?: {
+    source: string;
+    sourceId: string;
+  };
 }
 
 export interface GeneratedImage {

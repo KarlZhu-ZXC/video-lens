@@ -15,6 +15,7 @@ export interface LocalConfig {
     };
   };
   textAi: {
+    apiStyle: 'openai' | 'anthropic';
     apiUrl: string;
     apiKey: string;
     model: string;
@@ -24,6 +25,7 @@ export interface LocalConfig {
     requestMode: 'fetch' | 'gm_xhr' | 'auto';
   };
   imageAi: {
+    mode: 'api' | 'chatgpt_web';
     apiStyle: 'openai_images' | 'generic';
     apiUrl: string;
     apiKey: string;
@@ -32,6 +34,7 @@ export interface LocalConfig {
     quality?: string;
     responseFormat: 'url' | 'b64_json' | 'auto';
     requestMode: 'fetch' | 'gm_xhr' | 'auto';
+    chatgptConversationUrl: string;
   };
   summary: {
     autoRun: boolean;
@@ -41,12 +44,12 @@ export interface LocalConfig {
     chunkOverlapChars: number;
     maxChunks: number;
   };
-  videoInsights: { maxHistoryMessages: number };
+  chat: { maxHistoryMessages: number };
   ui: {
     language: 'zh-CN' | 'en-US';
     position: 'right' | 'left';
     panelWidth: number;
-    defaultTab: 'summary' | 'videoInsights' | 'oneImage' | 'settings';
+    defaultTab: 'summary' | 'settings';
     collapsed: boolean;
     launcherPosition?: { x: number; y: number };
   };

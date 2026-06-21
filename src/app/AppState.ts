@@ -1,6 +1,5 @@
-import type { GeneratedImage } from '../ai/image/types';
 import type { VideoInfo, Transcript, SubtitleOption } from '../sources/VideoSourceProvider';
-import type { SummaryResult, VideoInsightsMessage } from '../summary/types';
+import type { SummaryResult, ChatMessage } from '../summary/types';
 
 export interface AppState {
   video?: VideoInfo;
@@ -10,9 +9,8 @@ export interface AppState {
   summary?: SummaryResult;
   streamingSummary?: SummaryResult;
   summaryRequestPending: boolean;
-  generatedImage?: GeneratedImage;
-  videoInsightsHistory: VideoInsightsMessage[];
-  streamingVideoInsight?: VideoInsightsMessage;
+  summaryChatHistory: ChatMessage[];
+  streamingSummaryInsight?: ChatMessage;
   status: string;
   toast?: {
     id: number;
@@ -23,7 +21,7 @@ export interface AppState {
 
 export function createInitialState(): AppState {
   return {
-    videoInsightsHistory: [],
+    summaryChatHistory: [],
     subtitleOptions: [],
     status: '等待操作',
     busy: false,

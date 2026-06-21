@@ -24,3 +24,7 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Agent-generated planning files
+/.superpowers/
+/docs/superpowers/

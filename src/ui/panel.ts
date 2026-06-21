@@ -2,12 +2,12 @@ import type { AppController } from '../app/AppController';
 import { el } from '../utils/dom';
 import { PANEL_STYLES } from './styles';
 import type { TabId } from './types';
-import { renderSummaryView } from './summaryView';
-import { renderVideoInsightsView } from './videoInsightsView';
-import { renderOneImageView } from './oneImageView';
+import { renderSummaryView, updateSummaryOutput, renderChatMessage } from './summaryView';
 import { renderSettingsView } from './settingsModal';
 import { createUiText } from './i18n';
 import mascotLogoUrl from '../../assets/mascot/flat/logo.svg';
+
+export const SUMMARY_SCROLL_SELECTOR = '.vs-summary-scroll';
 
 export class Panel {
   private readonly host = document.createElement('div');
@@ -18,11 +18,9 @@ export class Panel {
   private toastNode?: HTMLElement;
   private renderedToastId?: number;
   private activeTab: TabId;
-  private thinkingOpen: boolean | undefined;
   private summaryOutputSticksToBottom = true;
   private summaryOutputScrollTop = 0;
-  private videoInsightsChatSticksToBottom = true;
-  private videoInsightsChatScrollTop = 0;
+  private summaryScrollRestoreGeneration = 0;
   private settingsDirty = false;
   private saveSettingsBeforeLeave?: () => boolean;
 
@@ -37,6 +35,15 @@ export class Panel {
 
   render(): void {
     this.syncFullscreenVisibility();
+    if (shouldPreserveDirtySettingsView(
+      this.activeTab,
+      this.settingsDirty,
+      this.controller.config.ui.collapsed,
+      Boolean(this.shellNode?.isConnected),
+    )) {
+      this.renderToast();
+      return;
+    }
     this.captureScrollIntent();
     if (!this.styleNode.isConnected) this.root.append(this.styleNode);
     this.shellNode?.remove();
@@ -66,7 +73,7 @@ export class Panel {
     }
 
     const shell = el('section', {
-      class: `vs-shell ${this.controller.config.ui.position} ${this.activeTab} ${this.activeTab === 'oneImage' ? 'wide' : ''}`,
+      class: `vs-shell ${this.controller.config.ui.position} ${this.activeTab} `,
       style: `--vs-width:${this.controller.config.ui.panelWidth}px`,
     });
     shell.append(this.renderResizeHandle());
@@ -80,7 +87,46 @@ export class Panel {
     this.root.append(shell);
     this.renderToast();
     this.restoreSummaryScroll();
-    this.restoreVideoInsightsScroll();
+      }
+
+  renderStreamChange(): void {
+    const isCollapsed = this.controller.config.ui.collapsed;
+    const isMainStreaming = Boolean(this.controller.state.streamingSummary);
+    const isInsightStreaming = Boolean(this.controller.state.streamingSummaryInsight);
+
+    if (this.activeTab === 'summary' && !isCollapsed) {
+      let updated = false;
+
+      if (isMainStreaming) {
+        const output = this.root.querySelector<HTMLElement>('.vs-output-content');
+        if (output) {
+          this.captureScrollIntent();
+          updateSummaryOutput(this.controller, output);
+          updated = true;
+        }
+      }
+
+      if (isInsightStreaming) {
+        const insightNode = this.root.querySelector<HTMLElement>('.vs-streaming-insight');
+        if (insightNode) {
+          this.captureScrollIntent();
+          const newInsightNode = renderChatMessage(
+            this.controller,
+            this.controller.state.streamingSummaryInsight,
+            true,
+          );
+          newInsightNode.classList.add('vs-streaming-insight');
+          insightNode.replaceWith(newInsightNode);
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        this.restoreSummaryScroll();
+        return;
+      }
+    }
+    this.render();
   }
 
   destroy(): void {
@@ -127,12 +173,6 @@ export class Panel {
   }
 
   private headerContent(t: ReturnType<typeof createUiText>): { title: string; caption?: string } {
-    if (this.activeTab === 'videoInsights') {
-      return { title: t('videoInsights.title'), caption: t('videoInsights.caption') };
-    }
-    if (this.activeTab === 'oneImage') {
-      return { title: t('oneImage.title'), caption: t('oneImage.caption') };
-    }
     if (this.activeTab === 'settings') {
       return { title: t('settings.title'), caption: t('settings.caption') };
     }
@@ -143,8 +183,6 @@ export class Panel {
     const t = createUiText(this.controller.config.ui.language);
     const tabs: Array<[TabId, string, string]> = [
       ['summary', t('tabs.summary'), t('tabs.summaryEyebrow')],
-      ['videoInsights', t('tabs.videoInsights'), t('tabs.videoInsightsEyebrow')],
-      ['oneImage', t('tabs.oneImage'), t('tabs.oneImageEyebrow')],
       ['settings', t('tabs.settings'), t('tabs.settingsEyebrow')],
     ];
     return el(
@@ -222,15 +260,12 @@ export class Panel {
 
   private toastPanelWidth(): number {
     const baseWidth = this.controller.config.ui.panelWidth;
-    if (this.activeTab === 'oneImage') return 750;
-    if (this.activeTab === 'summary' || this.activeTab === 'videoInsights') return baseWidth + 50;
+    if (this.activeTab === 'summary') return baseWidth + 50;
     return baseWidth;
   }
 
   private renderActiveTab(): HTMLElement {
-    if (this.activeTab === 'videoInsights') return renderVideoInsightsView(this.controller);
-    if (this.activeTab === 'oneImage') return renderOneImageView(this.controller);
-    if (this.activeTab === 'settings') {
+        if (this.activeTab === 'settings') {
       return renderSettingsView(this.controller, {
         onDirtyChange: (dirty) => {
           this.settingsDirty = dirty;
@@ -240,12 +275,7 @@ export class Panel {
         },
       });
     }
-    return renderSummaryView(this.controller, {
-      thinkingOpen: this.thinkingOpen,
-      onThinkingToggle: (open) => {
-        this.thinkingOpen = open;
-      },
-    });
+    return renderSummaryView(this.controller);
   }
 
   private iconButton(label: string, onClick: () => void): HTMLButtonElement {
@@ -324,33 +354,32 @@ export class Panel {
 
   private captureScrollIntent(): void {
     if (this.activeTab === 'summary') {
-      const output = this.root.querySelector('.vs-output-content');
-      if (!output) {
-        this.summaryOutputSticksToBottom = false;
-        return;
-      }
+      const output = this.root.querySelector(SUMMARY_SCROLL_SELECTOR);
+      if (!output) return;
       const distanceFromBottom = output.scrollHeight - output.scrollTop - output.clientHeight;
       this.summaryOutputSticksToBottom = distanceFromBottom < 96;
       this.summaryOutputScrollTop = output.scrollTop;
     }
-    if (this.activeTab === 'videoInsights') {
-      const chat = this.root.querySelector('.vs-chat');
-      if (!chat) {
-        this.videoInsightsChatSticksToBottom = true;
-        this.videoInsightsChatScrollTop = 0;
-        return;
-      }
-      const distanceFromBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight;
-      this.videoInsightsChatSticksToBottom = distanceFromBottom < 96;
-      this.videoInsightsChatScrollTop = chat.scrollTop;
     }
-  }
-
   private restoreSummaryScroll(): void {
     if (this.activeTab !== 'summary') return;
-    const output = this.root.querySelector('.vs-output-content');
+    const output = this.root.querySelector(SUMMARY_SCROLL_SELECTOR);
     if (!output) return;
+    const generation = ++this.summaryScrollRestoreGeneration;
+    const immediateTarget = resolveSummaryScrollTop(
+      this.summaryOutputSticksToBottom,
+      this.summaryOutputScrollTop,
+      output.scrollHeight,
+    );
+    output.scrollTop = immediateTarget;
+    const appliedScrollTop = output.scrollTop;
     requestAnimationFrame(() => {
+      if (!shouldApplySummaryScrollCorrection(
+        generation,
+        this.summaryScrollRestoreGeneration,
+        this.root.querySelector(SUMMARY_SCROLL_SELECTOR) === output,
+        Math.abs(output.scrollTop - appliedScrollTop) < 1,
+      )) return;
       output.scrollTop = resolveSummaryScrollTop(
         this.summaryOutputSticksToBottom,
         this.summaryOutputScrollTop,
@@ -359,17 +388,7 @@ export class Panel {
     });
   }
 
-  private restoreVideoInsightsScroll(): void {
-    if (this.activeTab !== 'videoInsights') return;
-    const chat = this.root.querySelector('.vs-chat');
-    if (!chat) return;
-    requestAnimationFrame(() => {
-      chat.scrollTop = this.videoInsightsChatSticksToBottom
-        ? chat.scrollHeight
-        : this.videoInsightsChatScrollTop;
-    });
   }
-}
 
 export function clampLauncherPosition(x: number, y: number, launcher: HTMLElement): { x: number; y: number } {
   const rect = launcher.getBoundingClientRect();
@@ -396,6 +415,15 @@ export function resolveSummaryScrollTop(sticksToBottom: boolean, previousScrollT
   return sticksToBottom ? scrollHeight : previousScrollTop;
 }
 
+export function shouldApplySummaryScrollCorrection(
+  scheduledGeneration: number,
+  currentGeneration: number,
+  elementStillMounted: boolean,
+  scrollPositionUnchanged: boolean,
+): boolean {
+  return scheduledGeneration === currentGeneration && elementStillMounted && scrollPositionUnchanged;
+}
+
 export function shouldLeaveSettingsTab(
   dirty: boolean,
   confirmSave: () => boolean,
@@ -406,7 +434,16 @@ export function shouldLeaveSettingsTab(
   return save ? save() : true;
 }
 
-type PanelIconName = TabId | 'collapse';
+export function shouldPreserveDirtySettingsView(
+  activeTab: TabId,
+  dirty: boolean,
+  collapsed: boolean,
+  hasRenderedShell: boolean,
+): boolean {
+  return activeTab === 'settings' && dirty && !collapsed && hasRenderedShell;
+}
+
+type PanelIconName = 'settings' | 'summary' | 'collapse' | 'close';
 
 export function panelIconPaths(name: PanelIconName): string[] {
   const icons: Record<PanelIconName, string[]> = {
@@ -417,15 +454,7 @@ export function panelIconPaths(name: PanelIconName): string[] {
       'M10 15.5h5',
       'M10 18.5h3.5',
     ],
-    videoInsights: [
-      'M5.5 6.5h13a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-6L8 20v-3H5.5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2z',
-      'M8 10h8M8 13h5',
-    ],
-    oneImage: [
-      'M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z',
-      'M7 15l3-3 2.5 2.5L15.5 11 19 15',
-      'M8.5 9.5h.1',
-    ],
+
     settings: [
       'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
       'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.52a2 2 0 0 1-1 1.73l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.73v-.52a2 2 0 0 1 1-1.73l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z',
@@ -433,6 +462,9 @@ export function panelIconPaths(name: PanelIconName): string[] {
     collapse: [
       'M6 6l12 12',
       'M18 6L6 18',
+    ],
+    close: [
+      'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
     ],
   };
   return icons[name];
