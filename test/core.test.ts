@@ -65,7 +65,11 @@ import { PANEL_STYLES } from '../src/ui/styles';
 import { getActiveProvider, isSupportedVideoUrl } from '../src/sources/providers';
 import { extractYoutubeVideoId, parseYoutubePlayerResponse } from '../src/sources/youtube/videoInfo';
 import { getYoutubeVideoFromOfficialApi } from '../src/sources/youtube/officialApi';
-import { parseBilibiliStats } from '../src/sources/bilibili/videoInfo';
+import {
+  fetchBilibiliFollowerCount,
+  parseBilibiliPageFollowers,
+  parseBilibiliStats,
+} from '../src/sources/bilibili/videoInfo';
 import {
   buildTargetLanguageTranslatedTracks,
   getYoutubeSubtitleOptions,
@@ -414,6 +418,30 @@ describe('video source providers', () => {
       coins: 6_789,
       favorites: 9_876,
     });
+  });
+
+  it('reads creator followers from Bilibili page state', () => {
+    expect(parseBilibiliPageFollowers({ upData: { fans: 456_789 } })).toBe(456_789);
+    expect(parseBilibiliPageFollowers({ upData: { fans: -1 } })).toBeUndefined();
+  });
+
+  it('fetches Bilibili creator followers by owner mid', async () => {
+    const fetcher = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => ({ data: { follower: 987_654 } }),
+      url,
+    })) as unknown as typeof fetch;
+
+    await expect(fetchBilibiliFollowerCount(12345, fetcher)).resolves.toBe(987_654);
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://api.bilibili.com/x/relation/stat?vmid=12345',
+      { credentials: 'include' },
+    );
+  });
+
+  it('keeps Bilibili video metadata usable when follower lookup fails', async () => {
+    const fetcher = vi.fn(async () => { throw new Error('network'); }) as unknown as typeof fetch;
+    await expect(fetchBilibiliFollowerCount(12345, fetcher)).resolves.toBeUndefined();
   });
 });
 
