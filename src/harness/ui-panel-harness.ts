@@ -20,6 +20,7 @@ const controller = {
       cid: 1,
       title: 'Understanding Large Language Models in 2024',
       upName: 'AI Research Lab',
+      creatorFollowers: 128_600,
       coverUrl:
         'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 240 160%22%3E%3Crect width=%22240%22 height=%22160%22 fill=%22%2309090b%22/%3E%3Ccircle cx=%22178%22 cy=%2252%22 r=%2244%22 fill=%22%237c3aed%22 opacity=%22.45%22/%3E%3Cpath d=%22M30 118h180%22 stroke=%22%2334d399%22 stroke-width=%226%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M44 86h94%22 stroke=%22%23a78bfa%22 stroke-width=%226%22 stroke-linecap=%22round%22/%3E%3C/svg%3E',
       duration: 754,

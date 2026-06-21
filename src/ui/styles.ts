@@ -724,7 +724,7 @@ textarea::-webkit-scrollbar-thumb,
 
 .vs-video-meta {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   min-width: 0;
   width: 100%;
   gap: 7px 10px;
@@ -762,6 +762,11 @@ textarea::-webkit-scrollbar-thumb,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vs-video-meta-item svg[data-filled="true"] {
+  fill: currentColor;
+  stroke: none;
 }
 
 .vs-config-chip svg {

@@ -56,6 +56,7 @@ import {
   shouldShowSummaryToolbar,
   summaryComposerState,
   SUMMARY_CONTEXT_ORDER,
+  videoMetadataItems,
 } from '../src/ui/summaryView';
 import { isVideoSummaryHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
 import { CONNECTION_TEST_LABEL, resolveSecretInput, resolveSecretValueForSave } from '../src/ui/settingsModal';
@@ -858,10 +859,10 @@ describe('summary scroll preservation', () => {
     expect(subtitleRule).toContain('max-width: min(170px, 40%);');
   });
 
-  it('uses a four-column video description grid with a narrow two-column fallback', () => {
+  it('uses a three-column video description grid with a narrow two-column fallback', () => {
     const metaRule = /\.vs-video-meta \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     expect(metaRule).toContain('display: grid;');
-    expect(metaRule).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));');
+    expect(metaRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(PANEL_STYLES).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
   });
 
@@ -1511,6 +1512,39 @@ describe('video statistics presentation', () => {
       'coins',
       'favorites',
     ]);
+  });
+
+  it('orders creator, followers, upload time, and engagement in a 3x3 grid', () => {
+    const items = videoMetadataItems({
+      source: 'bilibili',
+      sourceId: 'BV-meta',
+      title: 'Video',
+      upName: '测试 UP',
+      creatorFollowers: 123_456,
+      publishedAt: 1_735_689_600,
+      stats: {
+        views: 1,
+        danmaku: 2,
+        comments: 3,
+        likes: 4,
+        coins: 5,
+        favorites: 6,
+      },
+      url: 'https://www.bilibili.com/video/BV-meta',
+    }, 'zh-CN');
+
+    expect(items.map((item) => item.key)).toEqual([
+      'creator',
+      'followers',
+      'uploaded',
+      'views',
+      'danmaku',
+      'comments',
+      'likes',
+      'coins',
+      'favorites',
+    ]);
+    expect(items[1]).toMatchObject({ icon: 'followers', label: '12.3万' });
   });
 });
 
