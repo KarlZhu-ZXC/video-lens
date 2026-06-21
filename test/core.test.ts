@@ -64,7 +64,7 @@ import {
   SUMMARY_CONTEXT_ORDER,
   videoMetadataItems,
 } from '../src/ui/summaryView';
-import { isVideoSummaryHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
+import { isVideoLensHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
 import { CONNECTION_TEST_LABEL, resolveSecretInput, resolveSecretValueForSave } from '../src/ui/settingsModal';
 import { normalizeAssetUrl } from '../src/utils/url';
 import { DEV_HARNESS_COMMAND, HARNESS_ENTRY_SCRIPT } from '../src/harness/constants';
@@ -1400,7 +1400,8 @@ describe('ui i18n', () => {
   });
 
   it('returns Chinese by default and English when requested', () => {
-    expect(getUiText('zh-CN', 'appName')).toBe('AI总结');
+    expect(getUiText('zh-CN', 'appName')).toBe('片语');
+    expect(getUiText('en-US', 'appName')).toBe('Video Lens');
     expect(getUiText('zh-CN', 'tabs.summary')).toBe('摘要');
     expect(getUiText('en-US', 'tabs.summary')).toBe('Summary');
     expect(getUiText('en-US', 'summary.emptyTitle')).toBe('No summary yet');
@@ -1456,10 +1457,12 @@ describe('harness entrypoint', () => {
 
 describe('route watcher wrappers', () => {
   it('marks wrapped history functions so repeated watchers can avoid double wrapping', () => {
-    const wrapped = Object.assign(function pushState() {}, { __videoSummaryRouteWatcher: true });
+    const wrapped = Object.assign(function pushState() {}, { __videoLensRouteWatcher: true });
+    const legacyWrapped = Object.assign(function pushState() {}, { __videoSummaryRouteWatcher: true });
 
-    expect(isVideoSummaryHistoryWrapper(wrapped)).toBe(true);
-    expect(isVideoSummaryHistoryWrapper(function pushState() {})).toBe(false);
+    expect(isVideoLensHistoryWrapper(wrapped)).toBe(true);
+    expect(isVideoLensHistoryWrapper(legacyWrapped)).toBe(true);
+    expect(isVideoLensHistoryWrapper(function pushState() {})).toBe(false);
   });
 });
 

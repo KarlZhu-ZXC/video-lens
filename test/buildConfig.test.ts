@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import packageJson from '../package.json';
-import { userscriptVersion } from '../vite.config';
+import {
+  userscriptFileName,
+  userscriptName,
+  userscriptNamespace,
+  userscriptVersion,
+} from '../vite.config';
 
 describe('userscript build metadata', () => {
   it('uses the package version for the userscript version', () => {
     expect(userscriptVersion).toBe(packageJson.version);
+  });
+
+  it('uses the Video Lens package and userscript identity', () => {
+    expect(packageJson.name).toBe('video-lens');
+    expect(userscriptName).toBe('片语 · Video Lens');
+    expect(userscriptNamespace).toContain('/video-lens');
+    expect(userscriptFileName).toBe('video-lens.user.js');
   });
 });

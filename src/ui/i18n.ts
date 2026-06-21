@@ -3,8 +3,8 @@ import type { LocalConfig } from '../store/types';
 export type UiLanguage = LocalConfig['ui']['language'];
 
 const ZH = {
-  appName: 'AI总结',
-  launcherTitle: '打开 AI总结',
+  appName: '片语',
+  launcherTitle: '打开片语',
   closePanel: '收起',
   waitingVideo: '等待识别支持的视频',
   modelUnset: '未配置模型',
@@ -76,8 +76,8 @@ const ZH = {
 type UiDict = WidenStrings<typeof ZH>;
 
 const EN: UiDict = {
-  appName: 'AI Summary',
-  launcherTitle: 'Open AI Summary',
+  appName: 'Video Lens',
+  launcherTitle: 'Open Video Lens',
   closePanel: 'Collapse',
   waitingVideo: 'Waiting for a supported video',
   modelUnset: 'Model not configured',

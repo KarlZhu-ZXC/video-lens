@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG } from '../store/configStore';
 import { createInitialState } from '../app/AppState';
 import type { AppController } from '../app/AppController';
 
-const GENERATED_IMAGE_FIXTURE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#18181b"/><circle cx="620" cy="180" r="130" fill="#7c3aed"/><text x="72" y="570" fill="#a78bfa" font-family="sans-serif" font-size="34">VIDEO SUMMARY</text><text x="72" y="650" fill="#fafafa" font-family="sans-serif" font-size="64" font-weight="700">Core Insight</text></svg>');
+const GENERATED_IMAGE_FIXTURE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#18181b"/><circle cx="620" cy="180" r="130" fill="#7c3aed"/><text x="72" y="570" fill="#a78bfa" font-family="sans-serif" font-size="34">VIDEO LENS</text><text x="72" y="650" fill="#fafafa" font-family="sans-serif" font-size="64" font-weight="700">Core Insight</text></svg>');
 
 const listeners = new Set<() => void>();
 const controller = {
@@ -172,7 +172,7 @@ if (scenario === 'settings-chatgpt') {
     imageAi: {
       ...controller.config.imageAi,
       mode: 'chatgpt_web',
-      chatgptConversationUrl: 'https://chatgpt.com/g/g-p-video-summary/project',
+      chatgptConversationUrl: 'https://chatgpt.com/g/g-p-video-lens/project',
     },
     ui: { ...controller.config.ui, collapsed: false, defaultTab: 'settings' },
   };
@@ -246,4 +246,4 @@ if (scenario === 'image-error') {
 
 const panel = new Panel(controller);
 panel.render();
-(window as any).__VIDEO_SUMMARY_PANEL_HARNESS__ = { controller, panel, listeners };
+(window as any).__VIDEO_LENS_PANEL_HARNESS__ = { controller, panel, listeners };

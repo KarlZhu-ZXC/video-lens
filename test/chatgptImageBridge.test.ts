@@ -41,15 +41,15 @@ import { DEFAULT_CONFIG, mergeConfigForTest } from '../src/store/configStore';
 import { applyImageModeFieldVisibility, connectivityTestTooltip, settingsActionsDisabled, validateImageSettings } from '../src/ui/settingsModal';
 import { imageConfigurationLabel } from '../src/ui/summaryView';
 import { imageGenerationCacheIdentity } from '../src/app/AppController';
-import { claimVideoSummaryDocumentRuntime, claimVideoSummaryRuntime } from '../src/runtime/singleton';
+import { claimVideoLensDocumentRuntime, claimVideoLensRuntime } from '../src/runtime/singleton';
 import { shouldPreserveDirtySettingsView } from '../src/ui/panel';
 import { PANEL_STYLES } from '../src/ui/styles';
 
 describe('ChatGPT image bridge configuration', () => {
   it('claims one runtime instance per page and rejects duplicate injection', () => {
     const target: Record<string, unknown> = {};
-    expect(claimVideoSummaryRuntime(target)).toBe(true);
-    expect(claimVideoSummaryRuntime(target)).toBe(false);
+    expect(claimVideoLensRuntime(target)).toBe(true);
+    expect(claimVideoLensRuntime(target)).toBe(false);
     const attributes = new Set<string>();
     const documentLike = {
       documentElement: {
@@ -57,8 +57,19 @@ describe('ChatGPT image bridge configuration', () => {
         setAttribute: (name: string) => { attributes.add(name); },
       },
     };
-    expect(claimVideoSummaryDocumentRuntime(documentLike)).toBe(true);
-    expect(claimVideoSummaryDocumentRuntime(documentLike)).toBe(false);
+    expect(claimVideoLensDocumentRuntime(documentLike)).toBe(true);
+    expect(claimVideoLensDocumentRuntime(documentLike)).toBe(false);
+  });
+
+  it('does not start beside an already-active legacy Video Summary runtime', () => {
+    expect(claimVideoLensRuntime({ __VIDEO_SUMMARY_RUNTIME_ACTIVE__: true })).toBe(false);
+    const attributes = new Map([['data-video-summary-runtime-active', '1']]);
+    expect(claimVideoLensDocumentRuntime({
+      documentElement: {
+        hasAttribute: (name: string) => attributes.has(name),
+        setAttribute: (name: string, value: string) => attributes.set(name, value),
+      },
+    })).toBe(false);
   });
 
   it('migrates legacy image settings to API mode without losing API values', () => {

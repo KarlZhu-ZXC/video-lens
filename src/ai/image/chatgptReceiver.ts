@@ -329,14 +329,14 @@ export class ChatGptImageReceiver {
       ...details,
     } satisfies ChatGptImageResult;
     this.runtime.setValue(CHATGPT_IMAGE_RESULT_KEY, result);
-    this.page.documentElement.setAttribute('data-video-summary-chatgpt-bridge', JSON.stringify({
+    this.page.documentElement.setAttribute('data-video-lens-chatgpt-bridge', JSON.stringify({
       jobId: job.id,
       receiverId: this.receiverId,
       status,
       error: details.error,
       updatedAt: result.updatedAt,
     }));
-    console.info('[Video Summary][ChatGPT Bridge]', status, job.id, details.error ?? '');
+    console.info('[Video Lens][ChatGPT Bridge]', status, job.id, details.error ?? '');
   }
 
   private async waitForComposer(timeoutMs: number): Promise<HTMLElement> {
