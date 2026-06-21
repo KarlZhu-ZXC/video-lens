@@ -38,9 +38,17 @@
 - Use a Bilibili-style follower/person icon for the follower item and keep the existing owner/person icon for UP 主.
 - Normalize every icon to one view box and visual bounding box so their baselines and optical sizes align.
 
+## Reasoning Disclosure Motion
+
+- Replace the browser-dependent native `<summary>` marker with an explicit inline chevron.
+- Point the chevron right while collapsed and rotate it downward while expanded. Keep its optical size and muted color aligned with the `Thinking` / `Thought for …` label.
+- Apply a text shimmer only while reasoning is streaming: a narrow highlighted band travels left to right for 2 seconds, followed by a 2-second static pause, repeating on a 4-second cycle.
+- Keep completed `Thought for …` labels static while preserving hover and disclosure behavior.
+- Under `prefers-reduced-motion: reduce`, disable the sweep and show the normal muted label color.
+
 ## Verification And Delivery
 
-- Add tests for Bilibili owner/follower parsing, non-fatal follower fetch failure, metadata order, compact follower formatting, and storage migration.
+- Add tests for Bilibili owner/follower parsing, non-fatal follower fetch failure, metadata order, compact follower formatting, storage migration, explicit disclosure chevrons, and streaming-only shimmer styles.
 - Update harness fixtures for the complete 3×3 grid and inspect desktop and narrow layouts.
 - Run strict TypeScript unused checks, `pnpm test`, `pnpm build`, JSON parsing, and `git diff --check`.
 - Push a ready PR, merge after checks pass, rename the GitHub repository, update `origin`, and verify the merged commit through the new repository URL.
