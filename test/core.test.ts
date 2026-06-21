@@ -849,6 +849,16 @@ describe('summary scroll preservation', () => {
     expect(PANEL_STYLES).toContain('.vs-intent-option {');
   });
 
+  it('shows a custom reasoning chevron and a streaming-only four-second shimmer', () => {
+    expect(PANEL_STYLES).toContain('.vs-thinking summary::-webkit-details-marker');
+    expect(PANEL_STYLES).toContain('.vs-thinking-chevron');
+    expect(PANEL_STYLES).toContain('.vs-thinking[open] .vs-thinking-chevron');
+    expect(PANEL_STYLES).toContain('.vs-thinking-label.streaming');
+    expect(PANEL_STYLES).toContain('animation: vs-thinking-shimmer 4s linear infinite;');
+    expect(PANEL_STYLES).toContain('@keyframes vs-thinking-shimmer');
+    expect(PANEL_STYLES).toContain('50%, 100% { background-position: -120% 0; }');
+  });
+
   it('centers assistant placeholder content and compacts configuration controls', () => {
     const assistantRule = /\.vs-message\.assistant \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     const chipRule = /\.vs-config-chip \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
