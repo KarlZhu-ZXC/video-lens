@@ -15,6 +15,7 @@ export interface YoutubePlayerResponse {
     author?: string;
     shortDescription?: string;
     lengthSeconds?: string;
+    viewCount?: string;
     thumbnail?: {
       thumbnails?: Array<{ url?: string; width?: number; height?: number }>;
     };

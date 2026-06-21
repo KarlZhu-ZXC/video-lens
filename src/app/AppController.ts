@@ -1,17 +1,18 @@
-import { DirectOpenAIImageClient } from '../ai/image/DirectOpenAIImageClient';
-import { DirectOpenAITextClient } from '../ai/text/DirectOpenAITextClient';
-import { runOnePagePipeline } from '../onePage/onePagePipeline';
-import { exportElementAsPng } from '../onePage/exportPng';
+import { createImageAiClient } from '../ai/image/createClient';
+import { getLiveChatGptImageReceiver } from '../ai/image/ChatGptWebImageClient';
+import { normalizeChatGptProjectUrl } from '../ai/image/chatgptBridgeProtocol';
+import type { GeneratedImage } from '../ai/image/types';
+import { createTextAiClient } from '../ai/text/createClient';
 import { getActiveProvider, isSupportedVideoUrl } from '../sources/providers';
 import { watchVideoRouteChange } from '../sources/routeWatcher';
 import type { VideoInfo, VideoSourceProvider } from '../sources/VideoSourceProvider';
 import { loadConfig, saveConfig } from '../store/configStore';
 import { imageCache } from '../store/imageCache';
-import { onePageCache } from '../store/onePageCache';
 import { summaryCache } from '../store/summaryCache';
 import type { LocalConfig } from '../store/types';
-import { askVideoInsight } from '../summary/videoInsightsPipeline';
+import { askSummaryChat, buildOneImagePrompt, isImageGenerationRequest, ONE_IMAGE_PROMPT_TEMPLATE } from '../summary/chatPipeline';
 import { runSummaryPipeline } from '../summary/summaryPipeline';
+import { finalizeReasoningTiming, updateReasoningTiming } from '../summary/reasoningTiming';
 import type { SummaryResult } from '../summary/types';
 import { getErrorMessage } from '../utils/errors';
 import { stableHash } from '../utils/hash';
@@ -27,6 +28,7 @@ export class AppController {
   private unwatch?: () => void;
   private toastId = 0;
   private toastTimer?: ReturnType<typeof setTimeout>;
+  private _pendingSummaryStreamUpdate = false;
 
   async mount(): Promise<void> {
     this.unwatch = watchVideoRouteChange(() => void this.refreshVideo());
@@ -43,14 +45,29 @@ export class AppController {
       const provider = this.currentProvider();
       const previousVideo = this.state.video;
       const video = await this.readFreshVideoInfo(provider, previousVideo);
+      const subtitleOptions = provider.getSubtitleOptions ? await provider.getSubtitleOptions(video) : [];
+      const selectedSubtitleId = preferredSubtitleId(subtitleOptions, this.config.summary.language);
+
       const cached = summaryCache.find(
         (summary) =>
           summary.video.source === video.source &&
           summary.video.sourceId === video.sourceId &&
           summary.promptId === this.config.summary.defaultPromptId &&
-          summary.transcript.languageCode === this.state.selectedSubtitleId,
+          summary.transcript.languageCode === selectedSubtitleId,
       );
-      this.state = { ...createInitialState(), video, summary: cached, status: cached ? '已载入缓存摘要' : '已识别视频' };
+      this.state = {
+        ...createInitialState(),
+        video,
+        subtitleOptions,
+        selectedSubtitleId,
+        summary: cached,
+        status: cached ? '已载入缓存摘要' : '已识别视频',
+      };
+
+      if (!cached && this.config.summary.autoRun && subtitleOptions.length > 0) {
+        // Run generateSummary but don't await it to block the UI load
+        setTimeout(() => this.generateSummary(), 0);
+      }
     });
   }
 
@@ -58,7 +75,9 @@ export class AppController {
     await this.runTask('获取字幕', async () => {
       const provider = this.currentProvider();
       const video = this.state.video ?? (await provider.getVideoInfo());
-      const subtitleOptions = provider.getSubtitleOptions ? await provider.getSubtitleOptions(video) : [];
+      const subtitleOptions = this.state.subtitleOptions.length > 0
+        ? this.state.subtitleOptions
+        : (provider.getSubtitleOptions ? await provider.getSubtitleOptions(video) : []);
       const selectedSubtitleId =
         this.state.selectedSubtitleId ?? preferredSubtitleId(subtitleOptions, this.config.summary.language);
       const transcript = await provider.getTranscript(video, selectedSubtitleId);
@@ -68,7 +87,7 @@ export class AppController {
       this.state.selectedSubtitleId = transcript.languageCode ?? selectedSubtitleId;
       this.state.summaryRequestPending = true;
       this.setStatus('生成摘要');
-      const textAiClient = new DirectOpenAITextClient(this.config.textAi);
+      const textAiClient = createTextAiClient(this.config.textAi);
       const summary = await runSummaryPipeline({
         video,
         transcript,
@@ -77,6 +96,7 @@ export class AppController {
         onProgress: (message) => this.setStatus(message),
         onDelta: (partial) => {
           this.state.summaryRequestPending = false;
+          const reasoningTiming = updateReasoningTiming(this.state.streamingSummary ?? {}, partial);
           this.state.streamingSummary = {
             video,
             transcript,
@@ -84,10 +104,18 @@ export class AppController {
             content: partial.content,
             reasoning: partial.reasoning,
             createdAt: Date.now(),
+            ...reasoningTiming,
           };
-          this.emit();
+          if (!this._pendingSummaryStreamUpdate) {
+            this._pendingSummaryStreamUpdate = true;
+            requestAnimationFrame(() => {
+              this._pendingSummaryStreamUpdate = false;
+              this.events.emit('streamchange');
+            });
+          }
         },
       });
+      Object.assign(summary, finalizeReasoningTiming(this.state.streamingSummary ?? {}));
       this.state.summary = summary;
       this.state.streamingSummary = undefined;
       this.state.summaryRequestPending = false;
@@ -96,95 +124,99 @@ export class AppController {
     });
   }
 
-  async askQuestion(question: string): Promise<void> {
+
+  async askSummaryQuestion(question: string): Promise<void> {
     const trimmed = question.trim();
     if (!trimmed) return;
     if (!this.state.summary) {
-      await this.generateSummary();
-      if (!this.state.summary) {
-        this.setStatus('请先生成摘要');
-        return;
-      }
+      this.setStatus('请先生成摘要');
+      return;
     }
 
-    this.state.videoInsightsHistory.push({ role: 'user', content: trimmed });
-    this.state.streamingVideoInsight = { role: 'assistant', content: '' };
+    this.state.summaryChatHistory.push({ role: 'user', content: trimmed });
+    this.state.streamingSummaryInsight = { role: 'assistant', content: '' };
     this.emit();
 
-    await this.runTask('Video Insights', async () => {
-      const answer = await askVideoInsight(
-        new DirectOpenAITextClient(this.config.textAi),
+    await this.runTask('Summary Chat', async () => {
+      const textClient = createTextAiClient(this.config.textAi);
+      const summaryContent = this.state.summary!.content;
+
+      if (isImageGenerationRequest(trimmed)) {
+        const imagePrompt = buildOneImagePrompt(summaryContent);
+        const cacheKey = stableHash(
+          `${this.state.summary!.video.source}:${this.state.summary!.video.sourceId}:${summaryContent}:${imageGenerationCacheIdentity(this.config.imageAi)}:${ONE_IMAGE_PROMPT_TEMPLATE}`,
+        );
+        this.state.streamingSummaryInsight!.content = '正在呼叫画师，请稍候...';
+        this.emit();
+
+        try {
+          const cached = imageCache.get(cacheKey);
+          const imageResult = cached
+            ? { dataUrl: cached.dataUrl, url: cached.url }
+            : await createImageAiClient(this.config.imageAi).generateImage({
+                model: this.config.imageAi.model,
+                prompt: imagePrompt,
+                size: this.config.imageAi.size,
+                quality: this.config.imageAi.quality,
+                responseFormat: this.config.imageAi.responseFormat,
+                context: {
+                  source: this.state.summary!.video.source,
+                  sourceId: this.state.summary!.video.sourceId,
+                },
+              });
+          this.state.streamingSummaryInsight!.content = '';
+          this.state.streamingSummaryInsight!.generatedImage = imageResult;
+          if (!cached) cacheGeneratedImage(imageCache, cacheKey, imageResult, imagePrompt);
+        } catch (error) {
+          const failureMessage = `生成图片失败: ${getErrorMessage(error)}`;
+          this.state.streamingSummaryInsight!.content = failureMessage;
+          this.setStatus(failureMessage, true);
+        }
+
+        this.state.summaryChatHistory.push(this.state.streamingSummaryInsight!);
+        this.state.streamingSummaryInsight = undefined;
+        return;
+      }
+
+      const answer = await askSummaryChat(
+        textClient,
         this.config,
         this.state.summary!,
-        this.state.videoInsightsHistory,
+        this.state.summaryChatHistory,
         trimmed,
         {
           onDelta: (partial) => {
-            this.state.streamingVideoInsight = {
+            const reasoningTiming = updateReasoningTiming(this.state.streamingSummaryInsight ?? {}, partial);
+            this.state.streamingSummaryInsight = {
               role: 'assistant',
               content: partial.content,
               reasoning: partial.reasoning,
+              ...reasoningTiming,
             };
-            this.emit();
+            if (!this._pendingSummaryStreamUpdate) {
+              this._pendingSummaryStreamUpdate = true;
+              requestAnimationFrame(() => {
+                this._pendingSummaryStreamUpdate = false;
+                this.events.emit('streamchange');
+              });
+            }
           },
         },
       );
-      this.state.videoInsightsHistory.push({ role: 'assistant', content: answer.content, reasoning: answer.reasoning });
-      this.state.streamingVideoInsight = undefined;
-      this.setStatus('已回答');
-    });
-  }
-
-  async generateOneImage(options: { force?: boolean } = {}): Promise<void> {
-    if (!this.state.summary) {
-      const restored = await this.restoreCachedSummary();
-      if (!restored) {
-        this.setStatus('请先生成摘要');
-        return;
-      }
-    }
-
-    await this.runTask('生成一图流', async () => {
-      const textAiClient = new DirectOpenAITextClient(this.config.textAi);
-      const imageAiClient = this.config.imageAi.enabled ? new DirectOpenAIImageClient(this.config.imageAi) : undefined;
-      const oneImageConfig: LocalConfig = {
-        ...this.config,
-        onePage: { ...this.config.onePage, ...this.config.oneImage },
-      };
-      const result = await runOnePagePipeline({
-        summary: this.state.summary!,
-        textAiClient,
-        imageAiClient,
-        config: oneImageConfig,
-        force: options.force,
-        onProgress: (event) => this.setStatus(progressLabel(event.type)),
+      const reasoningTiming = finalizeReasoningTiming(this.state.streamingSummaryInsight ?? {});
+      this.state.summaryChatHistory.push({
+        role: 'assistant',
+        content: answer.content,
+        reasoning: answer.reasoning,
+        ...reasoningTiming,
       });
-      this.state.oneImage = result.data;
-      this.state.oneImageElement = result.composedElement;
-      this.state.oneImageZoom = 1;
-      this.setStatus('一图流已生成');
+      this.state.streamingSummaryInsight = undefined;
     });
   }
 
-  async generateOnePage(): Promise<void> {
-    await this.generateOneImage();
-  }
 
-  async exportOneImage(): Promise<void> {
-    if (!this.state.oneImageElement) {
-      await this.generateOneImage();
-      if (!this.state.oneImageElement) return;
-    }
-    await exportElementAsPng(
-      this.state.oneImageElement,
-      this.config.oneImage.exportScale,
-      `${sanitizeFileName(this.state.video?.title ?? 'video-summary')}.png`,
-    );
-    this.setStatus('PNG 已导出');
-  }
-
-  async copySummary(): Promise<void> {
-    const content = this.state.summary?.content;
+  async copySummary(text?: string): Promise<void> {
+    const content = text ?? this.state.summary?.content;
     if (!content) return;
     try {
       if (typeof GM_setClipboard === 'function') GM_setClipboard(content);
@@ -208,9 +240,19 @@ export class AppController {
     this.setStatus('MarkDown 已导出');
   }
 
-  setOneImageZoom(zoom: number): void {
-    this.state.oneImageZoom = Math.min(2.5, Math.max(0.35, zoom));
-    this.emit();
+  downloadGeneratedImage(image: GeneratedImage): void {
+    const href = generatedImageHref(image);
+    if (!href) {
+      this.setStatus('图片下载失败：没有可用图片');
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `${sanitizeFileName(this.state.video?.title ?? 'video-summary')}.png`;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    link.click();
+    this.setStatus('图片已下载');
   }
 
   updateConfig(patch: Partial<LocalConfig>, options: { showStatus?: boolean } = {}): void {
@@ -239,7 +281,7 @@ export class AppController {
       return;
     }
     await this.runTask('测试文本模型连通性', async () => {
-      await new DirectOpenAITextClient({ ...this.config.textAi, requestMode: 'auto' }).complete({
+      await createTextAiClient({ ...this.config.textAi, requestMode: 'auto' }).complete({
         model: this.config.textAi.model,
         messages: [{ role: 'user', content: 'Reply with OK.' }],
         temperature: 0,
@@ -251,8 +293,19 @@ export class AppController {
   }
 
   async testImageConnection(): Promise<void> {
-    if (this.config.oneImage.mode === 'text_card_only') {
-      this.setStatus('当前一图流模式不需要生图模型');
+    if (this.config.imageAi.mode === 'chatgpt_web') {
+      try {
+        normalizeChatGptProjectUrl(this.config.imageAi.chatgptConversationUrl);
+      } catch (error) {
+        this.setStatus(getErrorMessage(error));
+        return;
+      }
+      await this.runTask('测试 ChatGPT 网页接收端', async () => {
+        if (!getLiveChatGptImageReceiver(this.config.imageAi.chatgptConversationUrl)) {
+          throw new Error('未检测到 ChatGPT Project 接收端，请打开 Project 根页并刷新');
+        }
+        this.setStatus('ChatGPT Project 接收端在线');
+      });
       return;
     }
     if (!this.config.imageAi.apiKey.trim()) {
@@ -268,7 +321,7 @@ export class AppController {
       return;
     }
     await this.runTask('测试生图模型连通性', async () => {
-      await new DirectOpenAIImageClient({ ...this.config.imageAi, enabled: true, requestMode: 'auto' }).generateImage({
+      await createImageAiClient({ ...this.config.imageAi, requestMode: 'auto' }).generateImage({
         model: this.config.imageAi.model,
         prompt: 'Connectivity test image. Simple neutral abstract background, no text, no logo.',
         size: this.config.imageAi.size,
@@ -286,25 +339,35 @@ export class AppController {
     this.state.summary = undefined;
     this.state.streamingSummary = undefined;
     this.state.summaryRequestPending = false;
+    this.state.summaryChatHistory = [];
+    this.state.streamingSummaryInsight = undefined;
     this.setStatus('已清除此视频缓存');
   }
 
   clearAllCaches(): void {
     summaryCache.clear();
-    onePageCache.clear();
     imageCache.clear();
     this.state.summary = undefined;
     this.state.streamingSummary = undefined;
-    this.state.oneImage = undefined;
-    this.state.oneImageElement = undefined;
-    this.state.onePage = undefined;
-    this.state.onePageElement = undefined;
+    this.state.summaryRequestPending = false;
+    this.state.summaryChatHistory = [];
+    this.state.streamingSummaryInsight = undefined;
     this.setStatus('已清空全部缓存');
   }
 
   toggleCollapsed(): void {
     this.config = { ...this.config, ui: { ...this.config.ui, collapsed: !this.config.ui.collapsed } };
     this.emit();
+  }
+
+  async openFromLauncher(): Promise<void> {
+    if (!this.config.ui.collapsed) return;
+    this.config = { ...this.config, ui: { ...this.config.ui, collapsed: false } };
+    this.emit();
+    if (this.state.busy) return;
+    if (this.state.summary) return;
+    if (await this.restoreCachedSummary()) return;
+    await this.generateSummary();
   }
 
   updateLauncherPosition(position: { x: number; y: number }): void {
@@ -344,17 +407,17 @@ export class AppController {
     } catch (error) {
       logger.error(error);
       this.state.summaryRequestPending = false;
-      this.state.streamingVideoInsight = undefined;
-      this.setStatus(getErrorMessage(error));
+      this.state.streamingSummaryInsight = undefined;
+      this.setStatus(getErrorMessage(error), true);
     } finally {
       this.state.busy = false;
       this.emit();
     }
   }
 
-  private setStatus(status: string): void {
+  private setStatus(status: string, forceToast = false): void {
     this.state.status = status;
-    if (shouldToastStatus(status)) this.showToast(status);
+    if (forceToast || shouldToastStatus(status)) this.showToast(status);
     this.emit();
   }
 
@@ -407,33 +470,18 @@ const TOAST_STATUSES = new Set([
   '摘要已生成',
   '已回答',
   '请先生成摘要',
-  '一图流已生成',
-  'PNG 已导出',
   '摘要已复制',
   '已清除此视频缓存',
   '已清空全部缓存',
   '文本模型连通性正常',
   '生图模型连通性正常',
-  '当前一图流模式不需要生图模型',
+  'ChatGPT 网页接收端在线',
   'MarkDown 已导出',
   '设置已保存',
 ]);
 
 export function shouldToastStatus(status: string): boolean {
   return TOAST_STATUSES.has(status) || /失败|错误|failed|error/i.test(status);
-}
-
-function progressLabel(type: string): string {
-  const labels: Record<string, string> = {
-    generating_json: '生成一图流 JSON',
-    validating_json: '校验一图流 JSON',
-    generating_image_prompt: '生成图片 prompt',
-    generating_ai_image: '生成 AI 背景图',
-    rendering_card: '渲染中文信息图',
-    composing: '合成图片',
-    done: '一图流已生成',
-  };
-  return labels[type] ?? type;
 }
 
 function preferredSubtitleId(options: Array<{ id: string }>, language: LocalConfig['summary']['language']): string | undefined {
@@ -458,6 +506,29 @@ export function buildSummaryMarkdown(summary: SummaryResult): string {
 
 export function summaryMarkdownFileName(title: string): string {
   return `${sanitizeFileName(title || 'video-summary')}.md`;
+}
+
+export function generatedImageHref(image: GeneratedImage): string {
+  return image.dataUrl ?? image.url ?? '';
+}
+
+export function cacheGeneratedImage(
+  cache: { set: (key: string, value: { dataUrl?: string; url?: string; prompt: string }) => void },
+  key: string,
+  image: GeneratedImage,
+  prompt: string,
+): void {
+  try {
+    cache.set(key, { dataUrl: image.dataUrl, url: image.url, prompt });
+  } catch {
+    // Cache failures must not discard an image that was generated successfully.
+  }
+}
+
+export function imageGenerationCacheIdentity(config: LocalConfig['imageAi']): string {
+  return config.mode === 'chatgpt_web'
+    ? `chatgpt_web:${normalizeChatGptProjectUrl(config.chatgptConversationUrl)}`
+    : `api:${config.apiUrl}:${config.model}`;
 }
 
 function sanitizeFileName(name: string): string {

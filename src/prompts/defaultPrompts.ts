@@ -193,7 +193,7 @@ Chunk summaries:
   },
   {
     id: 'video_insights_default',
-    name: 'Video Insights',
+    name: 'Summary Chat',
     type: 'video_insights',
     builtIn: true,
     template: `你正在回答用户关于这个视频的问题。请基于摘要和字幕回答，不知道就说不知道。
@@ -216,66 +216,6 @@ Transcript:
 {{transcript}}
 
 Question: {{question}}`,
-  },
-  {
-    id: 'one_page_json',
-    name: '一图流 JSON',
-    type: 'one_page_json',
-    builtIn: true,
-    template: `请把以下视频摘要转换为一张中文信息图所需的严格 JSON。只输出 JSON，不要 Markdown。
-
-约束：
-- 必须是 JSON.parse 可以解析的标准 JSON
-- 所有属性名和字符串都必须使用英文双引号
-- 不要输出 <think>、解释、注释、代码块或尾随逗号
-- title 不超过 40 字
-- conclusion 不超过 100 字
-- keyPoints 3 到 8 条
-- takeaways 1 到 6 条
-- tags 1 到 8 个
-
-视频标题：{{title}}
-UP 主：{{upName}}
-原链接：{{url}}
-摘要：
-{{summary}}
-
-JSON 字段：title, subtitle, conclusion, keyPoints[{title,detail}], timeline[{time,event}], takeaways[], tags[], source{title,upName,url}`,
-    enTemplate: `Convert the following video summary into strict JSON for a shareable English infographic. Output JSON only, no Markdown.
-
-Rules:
-- Must be valid JSON.parse-compatible JSON
-- Use English double quotes for all property names and strings
-- Do not output <think>, explanations, comments, code fences, or trailing commas
-- title under 40 English words
-- conclusion under 100 English words
-- keyPoints 3 to 8 items
-- takeaways 1 to 6 items
-- tags 1 to 8 items
-
-Video title: {{title}}
-Creator: {{upName}}
-Original URL: {{url}}
-Summary:
-{{summary}}
-
-JSON fields: title, subtitle, conclusion, keyPoints[{title,detail}], timeline[{time,event}], takeaways[], tags[], source{title,upName,url}`,
-  },
-  {
-    id: 'image_prompt',
-    name: '图片 Prompt',
-    type: 'image_prompt',
-    builtIn: true,
-    template: `根据以下视频一图流数据，写一个适合图像模型的英文 prompt。
-
-要求：
-- 只输出最终英文 prompt，不要解释、不要分析、不要 Markdown
-- 120 到 220 个英文单词
-- 必须结合视频标题、结论、关键点和标签里的具体主题，不要泛泛而谈
-- 图片不应包含任何文字、字幕、汉字、YouTube logo、Bilibili logo、播放按钮、logo 或水印
-- 只负责生成抽象视觉背景、插画感场景和信息图氛围
-
-{{summary}}`,
   },
 ];
 

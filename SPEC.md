@@ -1,185 +1,84 @@
 # video-summary V1 Spec
 
-## 目标
+## 目标与运行形态
 
-`video-summary` 是一个面向 Bilibili 和 YouTube 视频页的 Tampermonkey userscript。它在视频页注入 Shadow DOM 面板，读取视频信息和字幕，调用 OpenAI-compatible 文本模型生成摘要、视频洞察问答和一图流数据，并在浏览器端渲染中文信息图。
+`video-summary` 是运行在 Tampermonkey 中的 Bilibili / YouTube 视频总结 userscript。项目使用 pnpm、Vite、TypeScript 和 `vite-plugin-monkey`，UI 由原生 DOM 与 Shadow DOM 构成。
 
-当前 V1 聚焦本地可用和快速迭代，不包含登录体系、付费系统、自建云端历史、YouTube playlist 批量总结或 Chrome Extension 版本。
+支持页面：
 
-## 运行形态
+- Bilibili `/video/`、`/list/`
+- YouTube `/watch?v=...`、`/shorts/...`
 
-- 包管理器：pnpm
-- 构建工具：Vite + TypeScript + vite-plugin-monkey
-- 运行载体：Tampermonkey userscript
-- UI 技术：原生 DOM + Shadow DOM
-- 构建产物：`dist/video-summary.user.js`
+## 启动与总结流程
 
-userscript metadata 声明 Tampermonkey grant：
+页面加载后先显示可拖动悬浮按钮。用户点击按钮时：
 
-- `GM_getValue`
-- `GM_setValue`
-- `GM_xmlhttpRequest`
-- `GM_setClipboard`
+1. 展开摘要和对话面板。
+2. 尝试恢复当前视频、模型、Prompt、语言和字幕源匹配的摘要缓存。
+3. 命中缓存时直接展示，不发送模型请求。
+4. 未命中时读取字幕并立即调用文本模型总结。
 
-userscript metadata 同时声明 `@connect` 允许访问字幕/元数据域名和 OpenAI-compatible API 域名，包括中国区 MiniMax `api.minimaxi.com` 与国际区 MiniMax `api.minimax.io`。
+摘要支持流式输出、长字幕分块/合并、Markdown 安全子集渲染、复制和 Markdown 导出。模型 reasoning 在初始摘要和后续问答中进入同一折叠区：流式时展开显示 `Thinking`，正文开始或请求完成后折叠为 `Thought for <duration>`。手动“重新生成”仍会重新执行总结流程。摘要完成后，可在下方对话框进行基于当前视频内容的连续问答。
 
-配置优先写入 Tampermonkey storage，避免 API Key 落到视频网站页面 origin 的 `localStorage`。请求通道由系统统一使用 `auto`：流式文本请求优先走浏览器 `fetch`，必要时回退到 GM XHR 的非流式请求；图片请求同样优先使用 fetch，失败时回退 GM XHR。设置页不再暴露请求模式选择。
+长字幕分段使用并发上限 2，并按原字幕索引保存结果。分段阶段只更新完成进度，不通过 `onDelta` 渲染分段正文。空分段自动重试一次，第二次仍为空则明确失败；整体合并结果为空、等同于单个分段或仍带明显的 `第 1/3 段` 标记时自动重试一次，第二次仍不完整则报错，不用分段内容冒充最终摘要。视频卡片通过统一 `VideoInfo.stats` 显示 provider 可用的统计数据，并将 UP 主、上传时间和统计项排成 4×2 Description 网格；缺失项不显示。
 
-## 适用页面
+## 视频与字幕
 
-脚本由 Tampermonkey 注入到 Bilibili 和 YouTube 域名：
+provider registry 只负责视频站点来源，不参与模型配置。Bilibili 保持现有视频信息和 `upName` 兼容行为。YouTube 支持页面 `captionTracks`、同源 youtubei fallback、JSON3/XML 字幕、人工/自动/翻译字幕和可选官方 API 元数据配置。
 
-- `*://*.bilibili.com/*`
-- `*://bilibili.com/*`
-- `*://*.youtube.com/*`
+## 模型配置
 
-实际 UI 只在以下页面启用：
+设置页不包含模型供应商概念。文本模型与图片模型各自保留一组独立配置：
 
-- `bilibili.com/video/`
-- `bilibili.com/list/`
-- `youtube.com/watch?v=...`
-- `youtube.com/shorts/...`
-
-## 核心流程
-
-1. 页面加载后执行 `src/main.ts`。
-2. 判断当前 URL 是否为支持的 Bilibili 或 YouTube 视频页面。
-3. 创建 `AppController` 和 `Panel`。
-4. provider registry 根据 URL 选择 `BilibiliProvider` 或 `YouTubeProvider` 读取视频基本信息和字幕。
-5. 如果用户选择过字幕源，使用该字幕源；否则根据“字幕获取及总结语言”自动选择字幕：中文优先 `zh-CN -> zh -> first`，英文优先 `en -> translated en -> fallback`。YouTube provider 会先读取页面内 caption tracks；没有页面 tracks 时，请求同源 `youtubei/v1/player` 作为不需要 Google API Key 的纯前端 fallback；当总结语言变化时，清除旧的自动字幕选择，下一次生成重新按新语言选择。
-6. 摘要 pipeline 按字幕长度决定直接摘要或分块摘要。
-7. 文本模型以 stream 模式生成内容；长视频分块摘要完成后会在合并阶段继续展示已生成的分段内容，避免可见正文回到空状态。
-8. UI 实时渲染流式摘要、低干扰模型思考状态和 Markdown 正文。
-9. 摘要结果写入本地缓存。
-10. 用户可继续进行视频洞察问答、生成一图流、导出 PNG。
-
-当视频站点在同一个 SPA 页面内切换视频时，URL 变化后页面内的视频数据可能短暂滞后。`AppController.refreshVideo()` 会在检测到当前 URL 已变化但读取到的仍是旧视频 id 时进行短暂重试，避免用户打开另一个视频后面板继续展示上一个视频。
-
-YouTube 字幕读取的边界：当前实现只读取 YouTube 已向页面或 youtubei player 响应暴露的人工字幕、自动字幕和可翻译字幕。若视频没有这些字幕轨道，userscript 不会凭空生成转录文本；后续如需覆盖无字幕视频，需要接入 ASR，建议参考 `ASR_INTEGRATION_RESEARCH.md`。
-
-## 文本模型
-
-当前文本供应商只提供 `Minimax-CN`。设置项包括：
-
-- 文本供应商
 - Base URL
 - API Key
 - 模型
 - 连通性测试
 
-Base URL 保存时只做路径规范化，不改写用户填写的域名：
+请求继续使用 OpenAI-compatible 协议。文本请求自动优先流式 fetch，必要时回退 GM XHR；图片请求使用现有自动通道。API Key 优先保存在 Tampermonkey storage，不回填密码输入框，粘贴 `Bearer <key>` 时会去掉前缀。
 
-- 去掉尾部 `/`
-- 如果用户填完整 `/chat/completions`，保存为 base URL
-- 请求时再拼接 `/chat/completions`
+旧配置加载时保留已有文本/图片 URL、Key 和模型值，但丢弃供应商、模型预设列表、远程模式和一图流模式等废弃字段。
 
-API Key 保存和请求前会规范化：
+图片配置另有生图方式选择：
 
-- 支持直接填写 key
-- 支持粘贴 `Bearer <key>`，会自动去掉 `Bearer`
-- 已保存的 key 不会回填到设置页密码输入框；输入框留空保存时继续使用旧 key
-- 如果没有 Tampermonkey storage 能力，fallback 存储会剥离 API Key，避免写入页面 `localStorage`
-- 空 key 会在请求前报错
+- `api`：使用图片 Base URL、API Key 和模型，作为默认模式。
+- `chatgpt_web`：使用 `https://chatgpt.com/g/g-p-.../project` 根页，每次在该 Project 内新建独立聊天，不要求图片 API 配置。
 
-模型下拉当前包含：
+两种模式的配置值分别保留。网页模式连通性测试只检查接收页 heartbeat，不发送生图请求。
 
-- `MiniMax-M3`
-- `MiniMax-M2.7`
-- `MiniMax-M2.5`
-- `MiniMax-M2.1`
-- `MiniMax-M2.1-highspeed`
-- `MiniMax-M2`
-- `MiniMax-M1`
-- `MiniMax-Text-01`
+设置页只显示当前生图方式对应的字段。摘要页顶部固定显示视频卡片和模型配置；字幕选择合并到配置行的字幕胶囊，切换只更新 `selectedSubtitleId`，等待用户主动重新生成。只有总结和后续消息进入滚动区。初始总结流式更新不得替换滚动容器；无完整总结时禁用输入框并显示“开始总结”，完整总结生成后才显示透明、左对齐的功能工具栏。最新完成的 Agent 回复显示三个本地固定快捷意图，点击后走现有问答发送路径。
 
-## 流式渲染
+ChatGPT 网页生图的成功结果和图片分块通过不同 GM storage key 传播。视频页收到成功结果后必须短时等待全部声明分块，不得因跨 key 通知乱序立即失败。快捷功能按钮使用无边框、透明背景的纯图标样式，与对话背景融合。
 
-文本客户端解析 OpenAI-compatible SSE stream：
+## 意图与图片生成
 
-- `delta.content` 进入摘要正文
-- `delta.reasoning_content`、`delta.reasoningContent`、`delta.thinking` 进入模型思考
-- 正文里的 `<think>...</think>` 会被抽取到模型思考，并从正文中移除
-- 流式分片中的半截 `<think>` 标签会跨 chunk 追踪
+当用户在对话框中表达了生成图片的意图（如“画图”、“生图”等），系统会自动拦截纯文本对话，改为调用图片模型。
+本地使用以下固定模板拼接摘要，调用图片生成接口：
 
-UI 使用 `streamingSummary` 临时状态持续刷新。生成完成后写入 `summary` 并缓存。
+```text
+根据以下视频内容总结，生成一张信息可视化的精美配图，风格清晰美观，适合作为视频总结的封面图：
 
-## Markdown 渲染
+{summary}
+```
 
-摘要正文通过本地 Markdown 子集渲染器输出，不直接作为纯文本显示。当前支持：
+- 不调用文本模型生成图片 Prompt。
+- 不使用 HTML/CSS 卡片排版合成。
 
-- 标题 `#` 到 `####`
-- 段落
-- 无序列表
-- 有序列表
-- 粗体
-- 行内代码
-- HTTP/HTTPS 链接
-- HTTP/HTTPS 图片；显示资源 URL 会将 `//...` 和 `http://...` 规范为 HTTPS，减少 Mixed Content warning
+### ChatGPT 网页桥接
 
-渲染器通过 DOM 节点构建，不直接注入未处理的 HTML。
+同一 userscript 同时运行在视频页和 ChatGPT 页。视频页通过版本化 GM storage job 发布最终图片 Prompt；匹配 Project 根页的 ChatGPT 接收端每次创建独立聊天、自动填入输入框并发送，只监听该任务聊天中新增的 assistant 图片。视频页成功组装图片并发布消费 ACK 后，接收端才返回 Project 根页；失败或 ACK 超时则保留当前结果聊天。
 
-## 模型思考展示
+接收端优先把同源生成图下载为 Blob，以 512 KiB Base64 分块写回 GM storage；视频页重组为 `GeneratedImage` 后清理临时分块并进入现有图片缓存。无法下载二进制时可回传 HTTPS 图片 URL。heartbeat 30 秒失效，任务默认五分钟过期；网页模式失败不会自动调用图片 API。
 
-模型思考采用低干扰三态展示：
+若原生 GM value-change listener 不可用，桥接使用 `GM_getValue` 轮询回退。生图终态错误必须同时写入助手消息和顶部通知。
 
-- 仅有思考、正文尚未开始时，显示一行 `模型思考` 状态和最新思考片段。
-- 正文开始流式输出后，隐藏模型思考，避免遮挡摘要或对话正文。
-- 生成完成后，如果存在思考内容，显示默认收起的 `模型思考` 折叠行，用户可手动展开查看完整内容。
+UI 采用原生 Shadow DOM 构建，采用极致简约的单栏全高设计，只保留摘要对话流和右上角设置入口。面板宽度可拖动调节，支持拖拽宽度、临时收起、悬浮按钮拖动和浏览器全屏隐藏。设置页有未保存更改时，切换 Tab 会先确认保存。
+所有设置通过 Tampermonkey GM_setValue 存储。摘要与生成图片使用独立本地缓存；对话历史仅保留在当前页面会话中。一键清除缓存会清空摘要、图片及当前对话状态。
 
-## 一图流
+## 已知边界
 
-一图流流程包括：
-
-1. 基于摘要生成结构化 JSON。
-2. 校验 JSON schema。
-3. 可选生成图片 prompt 和 AI 背景图。
-4. 使用浏览器 DOM 合成中文信息图。
-5. 通过 `html-to-image` 生成 PNG base64 data URL，再转 Blob 触发下载。
-
-当前模板：
-
-- classic
-- dense
-- poster
-
-## 本地存储
-
-配置优先保存在 Tampermonkey storage。摘要、一图流和图片结果保存在浏览器本地缓存中。摘要缓存 key 包含平台、视频 id、prompt id、文本模型、字幕/总结语言和字幕源，避免不同平台、模型、提示词或字幕结果互相覆盖。
-
-摘要页会显示当前字幕语言、摘要生成时间和模型配置。加载到多个字幕源后，摘要页显示字幕源选择器；重新生成摘要时使用用户选择的字幕源。用户可以清除此视频的摘要缓存，也可以清空摘要、一图流和图片缓存。
-
-## UI 行为
-
-- 面板挂载在 Shadow DOM 中，减少与视频网站页面样式冲突。
-- 面板支持左/右位置配置，所有 Tab 共用一个面板宽度。宽度通过面板侧边 resize handle 调整并写入配置，拖拽范围为 `300px` 到 `900px`，拖拽保存不显示 `设置已保存` toast。
-- 默认以可拖动悬浮 mascot 按钮启动，点击后展开完整面板。
-- 面板支持临时收起；折叠状态不持久化，刷新后仍从悬浮按钮开始。
-- 进入浏览器全屏播放后，整个 Shadow DOM host 临时隐藏；退出全屏后恢复，避免 launcher 或完整面板覆盖 Bilibili / YouTube 全屏视频。
-- 摘要和一图流的主操作按钮使用底部吸底操作区，和设置页保存按钮保持一致。
-- 设置页语言 section 包含界面显示语言和字幕获取及总结语言。字幕/总结语言为英文时，字幕源优先尝试英文字幕；YouTube 没有英文但原字幕可翻译时，会优先使用 `tlang=en` 翻译字幕。摘要、长视频分块/合并、视频洞察和一图流 JSON 使用对应语言 prompt。
-- 设置页视频源 section 提供 YouTube 字幕策略：`auto` 默认先读页面内字幕，配置了官方 API 后可作为备用；`page` 只用页面字幕；`official` 优先官方 API 能力。
-- 设置页表单有未保存更改时，切换到其他 Tab 会弹出确认框；确认后先保存配置再离开，取消则停留在设置页。
-- 设置页文本模型和生图模型 section header 右侧提供 `连通性测试`。按钮 tooltip 会提示会实际发送轻量 API 请求；点击后会先保存并校验当前 section 的表单值，再发起测试请求；成功或失败都会通过全局 toast 反馈。
-- 设置页不再提供文本/图片请求模式、生图模型启用开关或面板宽度下拉；请求模式固定为自动，生图模型默认启用。
-- 全局顶部通知独立于 Tab 内容渲染，切换 Tab 不会重启未结束的通知动画。
-- Obsidian 高对比暗色 UI 使用 zinc surface scale 和清晰 outline 分层。
-
-## UI Harness
-
-项目提供根入口 `harness.html` 和 `pnpm dev:harness`，用于在本地 Vite 环境中渲染实际 Panel 类。固定场景通过 query 参数切换：
-
-- `?scenario=long-summary`
-- `?scenario=settings`
-- `?scenario=one-image`
-- `?scenario=error`
-
-## 已知限制
-
-- 自动请求模式中的 fetch 通道要求 AI API 支持浏览器 CORS。
-- 自动请求模式回退到 GM XHR 后可绕过浏览器 CORS，但无法提供真正的流式渲染。
-- API Key 仍然保存在本机 Tampermonkey storage，不提供账号级加密、同步或远程密钥托管。
-- 当前支持 Bilibili 视频/list 页面和 YouTube watch/shorts 页面；不支持 youtu.be、embed 或 playlist 批量总结入口。
-- YouTube 页面内字幕结构不是官方公共 API，YouTube 改版时可能失效；保留官方 API 配置作为备用元数据路径。
-- YouTube XML timedtext 字幕使用字符串解析，避免 YouTube 页面 Trusted Types 限制下 `DOMParser.parseFromString` 被拦截。
-- 当前没有云端账号、同步历史或支付体系。
-- Markdown 渲染器是安全子集，不支持完整 CommonMark。
+- 无字幕视频不会自动 ASR。
+- fetch 流式请求要求 API 支持浏览器 CORS；GM XHR fallback 可能一次性返回。
+- 图片 API 必须返回现有客户端支持的 URL 或 Base64 字段。
+- ChatGPT 网页模式依赖页面 DOM 和用户已有登录态，属于实验功能；页面改版、额度不足或生成拒绝会返回明确错误。
+- 本项目不包含登录、支付、自建后端、云端历史或 playlist 批量总结。

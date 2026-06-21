@@ -1,4 +1,4 @@
-import type { VideoInfo } from '../VideoSourceProvider';
+import type { VideoInfo, VideoStats } from '../VideoSourceProvider';
 import type { BilibiliInitialState } from './types';
 
 declare global {
@@ -34,6 +34,7 @@ export async function getBilibiliVideoInfo(): Promise<VideoInfo> {
     duration: data.duration,
     coverUrl: data.pic,
     publishedAt: data.pubdate ?? data.ctime,
+    stats: parseBilibiliStats(data.stat),
     url: location.href,
   };
 }
@@ -56,8 +57,26 @@ function fromInitialState(): VideoInfo | undefined {
     duration: data?.duration,
     coverUrl: data?.pic,
     publishedAt: data?.pubdate ?? data?.ctime,
+    stats: parseBilibiliStats(data?.stat),
     url: location.href,
   };
+}
+
+export function parseBilibiliStats(stat: Record<string, unknown> | undefined): VideoStats | undefined {
+  const stats: VideoStats = {
+    views: parseCount(stat?.view),
+    danmaku: parseCount(stat?.danmaku),
+    comments: parseCount(stat?.reply),
+    likes: parseCount(stat?.like),
+    coins: parseCount(stat?.coin),
+    favorites: parseCount(stat?.favorite),
+  };
+  return Object.values(stats).some((value) => value !== undefined) ? stats : undefined;
+}
+
+function parseCount(value: unknown): number | undefined {
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 0 ? count : undefined;
 }
 
 export function extractBvid(url: string): string | undefined {

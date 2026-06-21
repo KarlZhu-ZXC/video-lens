@@ -12,7 +12,17 @@ export interface VideoInfo {
   duration?: number;
   coverUrl?: string;
   publishedAt?: number;
+  stats?: VideoStats;
   url: string;
+}
+
+export interface VideoStats {
+  views?: number;
+  danmaku?: number;
+  comments?: number;
+  likes?: number;
+  coins?: number;
+  favorites?: number;
 }
 
 export type VideoSource = 'bilibili' | 'youtube';

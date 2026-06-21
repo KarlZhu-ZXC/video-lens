@@ -16,6 +16,14 @@ export interface BilibiliInitialState {
     owner?: {
       name?: string;
     };
+    stat?: {
+      view?: number;
+      danmaku?: number;
+      reply?: number;
+      like?: number;
+      coin?: number;
+      favorite?: number;
+    };
     pages?: Array<{
       cid: number;
       page: number;

@@ -28,6 +28,10 @@ export const PANEL_STYLES = `
   text-wrap: pretty;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 button,
 input,
 textarea,
@@ -226,8 +230,7 @@ button.icon svg {
   width: min(calc(var(--vs-width, 420px) + 72px), calc(100vw - 16px));
 }
 
-.vs-shell.summary,
-.vs-shell.videoInsights {
+.vs-shell.summary {
   width: min(calc(var(--vs-width, 420px) + 122px), calc(100vw - 16px));
 }
 
@@ -279,6 +282,8 @@ button.icon svg {
   border-left: 1px solid var(--vs-outline-variant);
   border-right: 1px solid var(--vs-outline-variant);
   overflow: hidden;
+  container-type: inline-size;
+  container-name: vs-panel;
 }
 
 .vs-toast {
@@ -573,16 +578,6 @@ textarea::-webkit-scrollbar-thumb,
   grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
 }
 
-.vs-content.videoInsights .vs-stack {
-  gap: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.vs-content.onePage .vs-stack,
-.vs-content.oneImage .vs-stack {
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-}
-
 .vs-content.settings .vs-stack {
   height: auto;
   overflow: visible;
@@ -601,8 +596,21 @@ textarea::-webkit-scrollbar-thumb,
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
   gap: 12px;
+}
+
+.vs-summary-layout {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.vs-one-image-layout {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.vs-summary-context {
+  min-height: 0;
+  display: grid;
+  gap: 10px;
 }
 
 .vs-settings-scroll,
@@ -612,7 +620,8 @@ textarea::-webkit-scrollbar-thumb,
   display: grid;
   align-content: start;
   gap: 16px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 4px;
 }
 
@@ -714,10 +723,11 @@ textarea::-webkit-scrollbar-thumb,
 }
 
 .vs-video-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   min-width: 0;
-  flex-wrap: wrap;
-  gap: 10px;
+  width: 100%;
+  gap: 7px 10px;
   color: var(--vs-muted);
   font-size: 11px;
   line-height: 1.3;
@@ -752,6 +762,11 @@ textarea::-webkit-scrollbar-thumb,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vs-config-chip svg {
+  width: 14px;
+  height: 14px;
 }
 
 .vs-video-info p {
@@ -790,8 +805,8 @@ textarea::-webkit-scrollbar-thumb,
 
 .vs-config-label {
   min-width: 0;
-  color: var(--vs-muted);
-  font-size: 11px;
+  color: white;
+  font-size: 14px;
   line-height: 1.2;
   font-weight: 800;
   text-transform: uppercase;
@@ -811,11 +826,12 @@ textarea::-webkit-scrollbar-thumb,
 .vs-config-chip {
   min-width: 0;
   max-width: min(178px, 34%);
-  min-height: 30px;
+  min-height: 26px;
+  max-height: 26px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 9px;
+  gap: 6px;
+  padding: 4px 8px;
   border: 1px solid var(--vs-outline-variant);
   border-radius: 999px;
   background: var(--vs-surface-high);
@@ -841,6 +857,50 @@ textarea::-webkit-scrollbar-thumb,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--vs-text);
+}
+
+.vs-subtitle-chip {
+  position: relative;
+  width: auto;
+  max-width: min(170px, 40%);
+  cursor: pointer;
+}
+
+.vs-select-wrapper {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.vs-select-wrapper::after {
+  content: attr(data-value) "   ";
+  font: inherit;
+  grid-area: 1 / 1;
+  visibility: hidden;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vs-subtitle-chip select {
+  grid-area: 1 / 1;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  appearance: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--vs-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.vs-subtitle-chip option {
+  background: #fff;
+  color: #111;
 }
 
 .vs-start-button {
@@ -880,20 +940,6 @@ textarea::-webkit-scrollbar-thumb,
   border-color: rgba(167, 139, 250, .42);
 }
 
-.vs-subtitle-picker {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.vs-subtitle-picker span {
-  color: var(--vs-muted);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .vs-progress {
   height: 4px;
   overflow: hidden;
@@ -925,7 +971,6 @@ textarea::-webkit-scrollbar-thumb,
 }
 
 .vs-output,
-.vs-chat,
 .vs-preview-wrap {
   min-height: 300px;
   max-height: none;
@@ -948,27 +993,36 @@ textarea::-webkit-scrollbar-thumb,
 .vs-output-toolbar {
   position: relative;
   z-index: 4;
-  min-height: 44px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--vs-outline-variant);
-  background: rgba(18, 18, 21, .78);
+  border: 0;
+  background: transparent;
 }
 
 .vs-output-tool {
   position: relative;
   z-index: 2;
-  width: 32px;
-  height: 32px;
-  min-height: 32px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
   display: inline-flex;
   justify-content: center;
   align-items: center;
   padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--vs-muted);
+}
+
+.vs-output-tool:hover:not(:disabled),
+.vs-output-tool:focus-visible:not(:disabled) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--vs-text);
 }
 
 .vs-output-tool::after {
@@ -1002,7 +1056,6 @@ textarea::-webkit-scrollbar-thumb,
 .vs-output-content {
   min-height: 0;
   overflow: auto;
-  padding: 16px;
 }
 
 .vs-output::before,
@@ -1080,8 +1133,8 @@ textarea::-webkit-scrollbar-thumb,
 }
 
 .vs-thinking {
-  border-left: 2px solid var(--vs-outline-variant);
-  padding-left: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--vs-outline-variant);
 }
 
 .vs-thinking summary {
@@ -1093,6 +1146,20 @@ textarea::-webkit-scrollbar-thumb,
 
 .vs-thinking summary:hover {
   color: var(--vs-text);
+}
+
+.vs-thinking-content {
+  padding: 8px 0 0 18px;
+  color: var(--vs-secondary);
+  opacity: .78;
+}
+
+.vs-thinking-content .vs-markdown,
+.vs-thinking-content .vs-markdown p {
+  margin-top: 0;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .vs-thinking pre {
@@ -1145,9 +1212,12 @@ textarea::-webkit-scrollbar-thumb,
 }
 
 .vs-markdown {
+  min-width: 0;
   color: var(--vs-text);
   font-size: 14px;
   line-height: 1.7;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .vs-markdown h1,
@@ -1213,14 +1283,50 @@ textarea::-webkit-scrollbar-thumb,
   font-size: .88em;
 }
 
-.vs-code-block {
-  position: relative;
+.vs-code-wrapper {
   margin: 0 0 14px;
-  overflow: auto;
-  padding: 14px;
   border: 1px solid var(--vs-outline-variant);
   border-radius: 10px;
   background: #08080a;
+  overflow: hidden;
+}
+
+.vs-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.vs-code-lang {
+  color: var(--vs-secondary);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 11px;
+  text-transform: lowercase;
+}
+
+.vs-code-copy {
+  background: transparent;
+  border: none;
+  color: var(--vs-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.vs-code-copy:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.vs-code-block {
+  margin: 0;
+  overflow: auto;
+  padding: 12px 14px;
 }
 
 .vs-code-block code {
@@ -1228,15 +1334,6 @@ textarea::-webkit-scrollbar-thumb,
   background: transparent;
   color: var(--vs-text);
   white-space: pre;
-}
-
-.vs-code-lang {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  color: var(--vs-secondary);
-  font-family: "Geist Mono", ui-monospace, monospace;
-  font-size: 10px;
 }
 
 .vs-table-wrap {
@@ -1313,14 +1410,11 @@ textarea::-webkit-scrollbar-thumb,
   display: grid;
   align-content: start;
   gap: 16px;
-}
-
-.vs-content.videoInsights .vs-chat {
-  min-height: 0;
   border-width: 0;
   border-radius: 0;
   background: transparent;
-  padding: 16px;
+  padding: 0;
+  overflow: visible;
 }
 
 .vs-insight-context {
@@ -1365,49 +1459,73 @@ textarea::-webkit-scrollbar-thumb,
 }
 
 .vs-message {
-  display: grid;
-  gap: 5px;
-  max-width: 86%;
+  display: flex;
+  gap: 12px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .vs-message.user {
   justify-self: end;
+  max-width: 80%;
 }
 
 .vs-message.assistant {
   justify-self: start;
+  width: 100%;
+  max-width: 100%;
 }
 
-.vs-message span {
-  padding: 0 4px;
-  color: var(--vs-secondary);
-  font-size: 10px;
-  line-height: 1;
+.vs-message-content {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+  display: grid;
 }
 
-.vs-message > p {
-  margin: 0;
-  padding: 11px 12px;
-  border: 1px solid var(--vs-outline-variant);
-  border-radius: 12px;
+.vs-message-header {
   color: var(--vs-text);
   font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.vs-message.user > p {
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--vs-surface-highest);
+  border-radius: 18px;
+  border-bottom-right-radius: 4px;
+  color: var(--vs-text);
+  font-size: 14px;
   line-height: 1.5;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.vs-message.assistant .vs-ai-response {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--vs-text);
+  font-size: 14px;
+  line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .vs-message.typing {
-  max-width: 86px;
+  align-items: center;
 }
 
 .vs-typing-bubble {
   display: flex;
   gap: 6px;
   align-items: center;
-  padding: 12px;
-  border: 1px solid var(--vs-outline-variant);
-  border-radius: 12px;
-  border-top-left-radius: 3px;
-  background: var(--vs-surface-high);
+  padding: 8px 12px;
 }
 
 .vs-typing-bubble span {
@@ -1422,30 +1540,54 @@ textarea::-webkit-scrollbar-thumb,
 .vs-typing-bubble span:nth-child(2) { animation-delay: 120ms; }
 .vs-typing-bubble span:nth-child(3) { animation-delay: 240ms; }
 
-.vs-message.user > p {
-  border-color: rgba(167, 139, 250, .72);
-  border-top-right-radius: 3px;
-  background: var(--vs-surface);
-}
-
-.vs-message.assistant > p {
-  border-top-left-radius: 3px;
-  background: var(--vs-surface-high);
-}
-
-.vs-message.assistant .vs-ai-response {
-  padding: 11px 12px;
-  border: 1px solid var(--vs-outline-variant);
-  border-radius: 12px;
-  border-top-left-radius: 3px;
-  background: var(--vs-surface-high);
-  color: var(--vs-text);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
 .vs-message.assistant .vs-ai-response .vs-markdown {
   font-size: inherit;
+}
+
+.vs-intent-suggestions {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--vs-outline-variant);
+}
+
+.vs-intent-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.vs-intent-option {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--vs-outline-variant);
+  border-radius: 999px;
+  background: var(--vs-surface-high);
+  color: var(--vs-text);
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.vs-intent-option:hover {
+  border-color: rgba(167, 139, 250, .45);
+  color: var(--vs-text);
+}
+
+.vs-chat-image {
+  padding: 0;
+  border: none;
+  background: transparent;
+  margin-top: 8px;
+}
+
+.vs-chat-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 textarea,
@@ -1469,9 +1611,9 @@ textarea {
 }
 
 .vs-chat-input {
-  padding: 16px;
-  border-top: 1px solid var(--vs-outline-variant);
-  background: var(--vs-surface-container);
+  padding: 8px 0 0 0;
+  border-top: none;
+  background: transparent;
 }
 
 .vs-chat-composer {
@@ -1531,6 +1673,16 @@ textarea {
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.vs-chat-send.start-summary {
+  width: auto;
+  min-width: 88px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 input:focus,
@@ -1819,6 +1971,12 @@ select:focus {
   max-width: 100%;
 }
 
+@container vs-panel (max-width: 360px) {
+  .vs-video-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 560px) {
   .vs-toast.right,
   .vs-toast.left {
@@ -1828,8 +1986,7 @@ select:focus {
 
   .vs-shell,
   .vs-shell.wide,
-  .vs-shell.summary,
-  .vs-shell.videoInsights {
+  .vs-shell.summary {
     width: 100vw;
   }
 
@@ -1844,6 +2001,15 @@ select:focus {
   .vs-content {
     padding: 12px;
   }
+}
+
+.vs-generated-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 14px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .28);
 }
 
 @media (prefers-reduced-motion: reduce) {

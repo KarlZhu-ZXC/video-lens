@@ -2,7 +2,6 @@ import type { PromptPreset } from '../prompts/promptTypes';
 
 export const CONFIG_KEY = 'video_summary_config_v1';
 export const SUMMARY_CACHE_KEY = 'video_summary_summary_cache_v1';
-export const ONE_PAGE_CACHE_KEY = 'video_summary_one_page_cache_v1';
 export const IMAGE_CACHE_KEY = 'video_summary_image_cache_v1';
 
 export interface LocalConfig {
@@ -15,22 +14,18 @@ export interface LocalConfig {
       oauthAccessToken?: string;
     };
   };
-  providerMode: 'direct' | 'remote';
   textAi: {
-    provider?: 'minimax' | 'deepseek' | 'custom';
-    providerMode: 'direct' | 'remote';
+    apiStyle: 'openai' | 'anthropic';
     apiUrl: string;
     apiKey: string;
     model: string;
-    modelList: string[];
     temperature: number;
     maxTokens: number;
     stream: boolean;
     requestMode: 'fetch' | 'gm_xhr' | 'auto';
   };
   imageAi: {
-    enabled: boolean;
-    providerMode: 'direct' | 'remote';
+    mode: 'api' | 'chatgpt_web';
     apiStyle: 'openai_images' | 'generic';
     apiUrl: string;
     apiKey: string;
@@ -39,8 +34,8 @@ export interface LocalConfig {
     quality?: string;
     responseFormat: 'url' | 'b64_json' | 'auto';
     requestMode: 'fetch' | 'gm_xhr' | 'auto';
+    chatgptConversationUrl: string;
   };
-  remote: { backendBaseUrl?: string };
   summary: {
     autoRun: boolean;
     defaultPromptId: string;
@@ -49,28 +44,12 @@ export interface LocalConfig {
     chunkOverlapChars: number;
     maxChunks: number;
   };
-  videoInsights: { maxHistoryMessages: number };
-  onePage: {
-    enabled: boolean;
-    mode: 'text_card_only' | 'ai_image_background' | 'ai_image_only';
-    defaultTemplate: 'classic' | 'dense' | 'poster';
-    exportScale: number;
-    width: number;
-    includeQrCode: boolean;
-  };
-  oneImage: {
-    enabled: boolean;
-    mode: 'text_card_only' | 'ai_image_background' | 'ai_image_only';
-    defaultTemplate: 'classic' | 'dense' | 'poster';
-    exportScale: number;
-    width: number;
-    includeQrCode: boolean;
-  };
+  chat: { maxHistoryMessages: number };
   ui: {
     language: 'zh-CN' | 'en-US';
     position: 'right' | 'left';
     panelWidth: number;
-    defaultTab: 'summary' | 'videoInsights' | 'oneImage' | 'settings';
+    defaultTab: 'summary' | 'settings';
     collapsed: boolean;
     launcherPosition?: { x: number; y: number };
   };

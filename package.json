@@ -1,6 +1,6 @@
 {
   "name": "video-summary",
-  "version": "0.1.0",
+  "version": "0.2.11",
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "type": "module",
@@ -10,10 +10,6 @@
     "test:minimax": "RUN_MINIMAX_INTEGRATION=1 vitest run test/minimax.integration.test.ts",
     "dev:harness": "vite --host 127.0.0.1",
     "dev": "vite build --watch --mode development"
-  },
-  "dependencies": {
-    "html-to-image": "^1.11.13",
-    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/tampermonkey": "^5.0.4",

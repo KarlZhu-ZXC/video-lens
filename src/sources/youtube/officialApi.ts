@@ -14,7 +14,14 @@ interface YoutubeVideosListResponse {
     contentDetails?: {
       duration?: string;
     };
+    statistics?: YoutubeVideoStatistics;
   }>;
+}
+
+interface YoutubeVideoStatistics {
+  viewCount?: string;
+  likeCount?: string;
+  commentCount?: string;
 }
 
 type YoutubeThumbnail = { url?: string; width?: number; height?: number };
@@ -28,7 +35,7 @@ export async function getYoutubeVideoFromOfficialApi(
   if (!apiKey || strategy === 'page') return undefined;
 
   const url = new URL('https://www.googleapis.com/youtube/v3/videos');
-  url.searchParams.set('part', 'snippet,contentDetails');
+  url.searchParams.set('part', 'snippet,contentDetails,statistics');
   url.searchParams.set('id', videoId);
   url.searchParams.set('key', apiKey);
   const res = await fetch(url);
@@ -49,8 +56,24 @@ export async function getYoutubeVideoFromOfficialApi(
     duration: parseIsoDuration(item.contentDetails?.duration),
     coverUrl: bestThumbnail(item.snippet.thumbnails),
     publishedAt: parsePublishedAt(item.snippet.publishedAt),
+    stats: youtubeOfficialStats(item.statistics),
     url: `https://www.youtube.com/watch?v=${item.id}`,
   };
+}
+
+function youtubeOfficialStats(statistics: YoutubeVideoStatistics | undefined): VideoInfo['stats'] {
+  if (!statistics) return undefined;
+  const stats = {
+    views: parseCount(statistics.viewCount),
+    likes: parseCount(statistics.likeCount),
+    comments: parseCount(statistics.commentCount),
+  };
+  return Object.values(stats).some((value) => value !== undefined) ? stats : undefined;
+}
+
+function parseCount(value: unknown): number | undefined {
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 0 ? count : undefined;
 }
 
 export interface OfficialYoutubeCaptionOption extends SubtitleOption {

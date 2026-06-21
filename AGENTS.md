@@ -9,9 +9,9 @@ Before writing code:
 1. Read this file.
 2. Read `README.md` for usage and project scope.
 3. Read `SPEC.md` for architecture, data flow, and UI behavior.
-4. Read `PROJECT_REVIEW_RECOMMENDATIONS.md` for completed work and current backlog.
+4. Read `progress/PROJECT_REVIEW_RECOMMENDATIONS.md` for completed work and current backlog.
 5. Run `./init.sh` when the task can affect build, tests, or runtime behavior.
-6. Check `feature_list.json` and `progress.md` before choosing implementation order.
+6. Check `FEATURES.md` and `progress/README.md` before choosing implementation order.
 
 ## Working Rules
 
@@ -21,7 +21,7 @@ Before writing code:
 - Do not revert user changes or unrelated dirty worktree files.
 - Use `rg` / `rg --files` for search.
 - Use `apply_patch` for manual file edits.
-- Update relevant docs when behavior changes: `README.md`, `SPEC.md`, `FEATURES.md`, or `PROJECT_REVIEW_RECOMMENDATIONS.md`.
+- Update relevant docs when behavior changes: `README.md`, `SPEC.md`, `FEATURES.md`, or `progress/PROJECT_REVIEW_RECOMMENDATIONS.md`.
 - For UI/layout changes, verify with the harness when practical: `pnpm dev:harness` and `harness.html`.
 
 ## Key Project Context
@@ -62,14 +62,14 @@ A change is done when:
 - Bilibili and YouTube behavior boundaries are respected.
 - Tests/build or an explicit verification alternative has passed.
 - Relevant documentation is updated.
-- `progress.md` and `feature_list.json` reflect the new state when the work changes project direction or backlog status.
+- `FEATURES.md` and `progress/README.md` reflect the new state when the work changes project direction or backlog status.
 - The final response states what changed and what was verified.
 
 ## Session Handoff
 
 Before ending a long or stateful session:
 
-1. Update `progress.md` with completed work, verification evidence, and open risks.
-2. Update `feature_list.json` if feature status changed.
-3. If work is incomplete, write a short handoff using `session-handoff.md`.
+1. Update `progress/README.md` with completed work, verification evidence, and open risks.
+2. Update `FEATURES.md` if feature status changed.
+3. If work is incomplete, write a short handoff under `progress/`.
 4. Leave the repository restartable for the next agent.

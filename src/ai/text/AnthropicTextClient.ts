@@ -1,10 +1,10 @@
 import type { LocalConfig } from '../../store/types';
-import { normalizeApiKey, normalizeOpenAIBaseUrl } from './providers';
-import { createOpenAIStreamParser } from './streamParser';
+import { normalizeApiKey } from './providers';
+import { createAnthropicStreamParser } from './streamParser';
 import type { TextAiClient } from './TextAiClient';
 import type { TextCompletionDelta, TextCompletionRequest, TextCompletionResult } from './types';
 
-export class DirectOpenAITextClient implements TextAiClient {
+export class AnthropicTextClient implements TextAiClient {
   constructor(private readonly config: LocalConfig['textAi']) {}
 
   async complete(
@@ -31,14 +31,15 @@ export class DirectOpenAITextClient implements TextAiClient {
     apiKey: string,
     options?: { signal?: AbortSignal; onDelta?: (delta: TextCompletionDelta) => void },
   ): Promise<TextCompletionResult> {
-    const res = await fetch(normalizeChatCompletionsUrl(this.config.apiUrl), {
+    const res = await fetch(normalizeAnthropicUrl(this.config.apiUrl), {
       method: 'POST',
       signal: options?.signal,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify(buildChatCompletionsPayload(request, this.config)),
+      body: JSON.stringify(buildAnthropicPayload(request, this.config)),
     });
 
     if (!res.ok) throw new Error(`Text generation failed: ${res.status} ${await res.text()}`);
@@ -46,33 +47,29 @@ export class DirectOpenAITextClient implements TextAiClient {
     if (request.stream && res.body) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      const parseStream = createOpenAIStreamParser();
+      const parseStream = createAnthropicStreamParser();
       let content = '';
-      let reasoning = '';
       const consumeDeltas = (deltas: ReturnType<typeof parseStream>) => {
         deltas.forEach((delta) => {
-          if (delta.reasoning) reasoning += delta.reasoning;
           if (delta.content) content += delta.content;
-          if (delta.content || delta.reasoning) options?.onDelta?.(delta);
+          if (delta.content) options?.onDelta?.(delta);
         });
       };
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
-        const rawText = decoder.decode(value, { stream: true });
-        consumeDeltas(parseStream(rawText));
+        consumeDeltas(parseStream(decoder.decode(value, { stream: true })));
       }
       consumeDeltas(parseStream(decoder.decode()));
       consumeDeltas(parseStream('\n'));
-      return { content, reasoning };
+      return { content, reasoning: '' };
     }
 
     const json = await res.json();
-    const message = json.choices?.[0]?.message ?? {};
-    const toolArguments = message.tool_calls?.[0]?.function?.arguments;
+    const content = json.content?.map((c: any) => c.text).join('') ?? '';
     return {
-      content: toolArguments ?? message.content ?? '',
-      reasoning: message.reasoning_content ?? message.reasoningContent,
+      content,
+      reasoning: '',
       raw: json,
     };
   }
@@ -83,20 +80,21 @@ export class DirectOpenAITextClient implements TextAiClient {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
         method: 'POST',
-        url: normalizeChatCompletionsUrl(this.config.apiUrl),
+        url: normalizeAnthropicUrl(this.config.apiUrl),
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
         },
-        data: JSON.stringify(buildChatCompletionsPayload({ ...request, stream: false }, this.config)),
+        data: JSON.stringify(buildAnthropicPayload({ ...request, stream: false }, this.config)),
         onload: (res) => {
           if (res.status < 200 || res.status >= 300) {
             reject(new Error(`Text generation failed: ${res.status} ${res.responseText}`));
             return;
           }
           const json = JSON.parse(res.responseText);
-          const message = json.choices?.[0]?.message ?? {};
-          resolve({ content: message.tool_calls?.[0]?.function?.arguments ?? message.content ?? '', raw: json });
+          const content = json.content?.map((c: any) => c.text).join('') ?? '';
+          resolve({ content, raw: json });
         },
         onerror: () => reject(new Error('Text generation request failed')),
       });
@@ -104,29 +102,43 @@ export class DirectOpenAITextClient implements TextAiClient {
   }
 }
 
-export function buildChatCompletionsPayload(request: TextCompletionRequest, config: LocalConfig['textAi']): object {
+export function buildAnthropicPayload(request: TextCompletionRequest, config: LocalConfig['textAi']): object {
   const maxTokens = request.maxTokens ?? config.maxTokens;
+  const messages = [...request.messages];
+  let system = '';
+  if (messages.length > 0 && messages[0].role === 'system') {
+    system = messages[0].content;
+    messages.shift();
+  }
+
   const payload: Record<string, unknown> = {
     model: request.model,
-    messages: request.messages,
+    max_tokens: maxTokens,
+    messages: messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
     temperature: request.temperature ?? config.temperature,
     stream: request.stream ?? false,
-    tools: request.tools,
-    tool_choice: request.toolChoice,
   };
-  if (usesMaxCompletionTokens(request.model)) payload.max_completion_tokens = maxTokens;
-  else payload.max_tokens = maxTokens;
+
+  if (system) {
+    payload.system = system;
+  }
+
   return payload;
 }
 
-export function normalizeChatCompletionsUrl(apiUrl: string): string {
-  const trimmed = normalizeOpenAIBaseUrl(apiUrl);
+export function normalizeAnthropicUrl(apiUrl: string): string {
+  const trimmed = apiUrl.trim().replace(/\/+$/, '');
   if (!trimmed) return trimmed;
-  if (/\/chat\/completions$/i.test(trimmed)) return trimmed;
-  if (/\/v1$/i.test(trimmed)) return `${trimmed}/chat/completions`;
+  if (/\/v1\/messages$/i.test(trimmed)) return trimmed;
+  if (/\/v1$/i.test(trimmed)) return `${trimmed}/messages`;
+  try {
+    const url = new URL(trimmed);
+    if (!url.pathname || url.pathname === '/') {
+      url.pathname = '/v1/messages';
+      return url.toString();
+    }
+  } catch {
+    // Preserve custom non-URL inputs for the request layer to report.
+  }
   return trimmed;
-}
-
-function usesMaxCompletionTokens(model: string): boolean {
-  return /^MiniMax-M3$/i.test(model.trim());
 }
