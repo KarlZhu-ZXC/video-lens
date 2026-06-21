@@ -11,15 +11,15 @@ export function watchVideoRouteChange(callback: () => void): () => void {
 
   const originalPushState = history.pushState;
   const originalReplaceState = history.replaceState;
-  if (!isVideoSummaryHistoryWrapper(history.pushState)) {
-    history.pushState = markVideoSummaryHistoryWrapper(function pushState(this: History, ...args) {
+  if (!isVideoLensHistoryWrapper(history.pushState)) {
+    history.pushState = markVideoLensHistoryWrapper(function pushState(this: History, ...args) {
       const result = originalPushState.apply(this, args);
       notify();
       return result;
     });
   }
-  if (!isVideoSummaryHistoryWrapper(history.replaceState)) {
-    history.replaceState = markVideoSummaryHistoryWrapper(function replaceState(this: History, ...args) {
+  if (!isVideoLensHistoryWrapper(history.replaceState)) {
+    history.replaceState = markVideoLensHistoryWrapper(function replaceState(this: History, ...args) {
       const result = originalReplaceState.apply(this, args);
       notify();
       return result;
@@ -29,10 +29,10 @@ export function watchVideoRouteChange(callback: () => void): () => void {
 
   const timer = window.setInterval(notify, 1000);
   return () => {
-    if (history.pushState === originalPushState || isVideoSummaryHistoryWrapper(history.pushState)) {
+    if (history.pushState === originalPushState || isVideoLensHistoryWrapper(history.pushState)) {
       history.pushState = originalPushState;
     }
-    if (history.replaceState === originalReplaceState || isVideoSummaryHistoryWrapper(history.replaceState)) {
+    if (history.replaceState === originalReplaceState || isVideoLensHistoryWrapper(history.replaceState)) {
       history.replaceState = originalReplaceState;
     }
     window.removeEventListener('popstate', notify);
@@ -42,15 +42,19 @@ export function watchVideoRouteChange(callback: () => void): () => void {
 
 type HistoryFunction = typeof history.pushState;
 
-export interface VideoSummaryHistoryWrapper extends HistoryFunction {
+export interface VideoLensHistoryWrapper extends HistoryFunction {
+  __videoLensRouteWatcher?: true;
   __videoSummaryRouteWatcher?: true;
 }
 
-export function isVideoSummaryHistoryWrapper(fn: unknown): fn is VideoSummaryHistoryWrapper {
-  return typeof fn === 'function' && (fn as VideoSummaryHistoryWrapper).__videoSummaryRouteWatcher === true;
+export function isVideoLensHistoryWrapper(fn: unknown): fn is VideoLensHistoryWrapper {
+  return typeof fn === 'function' && (
+    (fn as VideoLensHistoryWrapper).__videoLensRouteWatcher === true
+    || (fn as VideoLensHistoryWrapper).__videoSummaryRouteWatcher === true
+  );
 }
 
-function markVideoSummaryHistoryWrapper<T extends HistoryFunction>(fn: T): T {
-  (fn as VideoSummaryHistoryWrapper).__videoSummaryRouteWatcher = true;
+function markVideoLensHistoryWrapper<T extends HistoryFunction>(fn: T): T {
+  (fn as VideoLensHistoryWrapper).__videoLensRouteWatcher = true;
   return fn;
 }

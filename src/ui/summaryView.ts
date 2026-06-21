@@ -4,7 +4,7 @@ import { el } from '../utils/dom';
 import { createUiText, type UiLanguage } from './i18n';
 import { renderAiResponse } from './aiResponse';
 import { normalizeAssetUrl } from '../utils/url';
-import type { SubtitleOption, Transcript, VideoStats } from '../sources/VideoSourceProvider';
+import type { SubtitleOption, Transcript, VideoInfo, VideoStats } from '../sources/VideoSourceProvider';
 import type { LocalConfig } from '../store/types';
 
 export const SUMMARY_CONTEXT_ORDER = ['video', 'configuration'] as const;
@@ -233,10 +233,8 @@ function renderFollowUpIntents(controller: AppController): HTMLElement {
 function renderVideoCard(controller: AppController): HTMLElement {
   const video = controller.state.video;
   const title = video?.title ?? 'Video';
-  const creator = video?.creatorName ?? video?.upName ?? video?.platform ?? 'Video';
-  const uploaded = formatPublishedAt(video?.publishedAt);
   const duration = formatDuration(video?.duration);
-  const stats = videoStatItems(video?.stats, controller.config.ui.language);
+  const metadata = videoMetadataItems(video, controller.config.ui.language);
 
   return el('article', { class: 'vs-video-card' }, [
     video?.coverUrl
@@ -251,12 +249,32 @@ function renderVideoCard(controller: AppController): HTMLElement {
     el('div', { class: 'vs-video-info' }, [
       el('h3', {}, [title]),
       el('div', { class: 'vs-video-meta' }, [
-        renderMetaItem('user', creator),
-        uploaded ? renderMetaItem('clock', uploaded) : '',
-        ...stats.map((item) => renderMetaItem(item.icon, item.label, item.title)),
+        ...metadata.map((item) => renderMetaItem(item.icon, item.label, item.title)),
       ]),
     ]),
   ]);
+}
+
+type VideoMetadataKey = 'creator' | 'followers' | 'uploaded' | keyof VideoStats;
+
+export function videoMetadataItems(
+  video: VideoInfo | undefined,
+  language: UiLanguage,
+): Array<{ key: VideoMetadataKey; icon: IconName; label: string; title: string }> {
+  if (!video) return [];
+  const items: Array<{ key: VideoMetadataKey; icon: IconName; label: string; title: string }> = [];
+  const creator = video.creatorName ?? video.upName ?? video.platform;
+  if (creator) items.push({ key: 'creator', icon: 'user', label: creator, title: creator });
+
+  if (video.creatorFollowers !== undefined && Number.isFinite(video.creatorFollowers) && video.creatorFollowers >= 0) {
+    const label = formatCompactCount(video.creatorFollowers, language);
+    const title = language === 'zh-CN' ? `粉丝 ${label}` : `Followers ${label}`;
+    items.push({ key: 'followers', icon: 'followers', label, title });
+  }
+
+  const uploaded = formatPublishedAt(video.publishedAt);
+  if (uploaded) items.push({ key: 'uploaded', icon: 'clock', label: uploaded, title: uploaded });
+  return [...items, ...videoStatItems(video.stats, language)];
 }
 
 export function formatCompactCount(value: number, language: UiLanguage): string {
@@ -475,7 +493,47 @@ function summaryTranscript(controller: AppController): Transcript | undefined {
   return controller.state.summary?.transcript ?? controller.state.streamingSummary?.transcript;
 }
 
-type IconName = 'article' | 'captions' | 'clearAll' | 'clock' | 'coin' | 'comment' | 'copy' | 'danmaku' | 'download' | 'favorite' | 'image' | 'like' | 'play' | 'sparkles' | 'trash' | 'user' | 'send';
+type IconName = 'article' | 'captions' | 'clearAll' | 'clock' | 'coin' | 'comment' | 'copy' | 'danmaku' | 'download' | 'favorite' | 'followers' | 'image' | 'like' | 'play' | 'sparkles' | 'trash' | 'user' | 'send';
+
+const BILIBILI_STAT_ICON_SPECS: Partial<Record<IconName, { viewBox: string; paths: string[] }>> = {
+  play: {
+    viewBox: '0 0 20 20',
+    paths: [
+      'M10 4.04c-2.103 0-3.938.107-5.234.212-.959.078-1.705.812-1.79 1.764A44.42 44.42 0 0 0 2.792 10c0 1.527.089 2.924.184 3.982.085.952.831 1.686 1.79 1.764 1.296.105 3.131.212 5.234.212 2.103 0 3.939-.107 5.235-.212.958-.078 1.704-.812 1.79-1.764.095-1.058.183-2.455.183-3.983 0-1.528-.088-2.924-.183-3.983-.086-.952-.832-1.686-1.79-1.764A65.74 65.74 0 0 0 10 4.04zm0-1c2.136 0 4 .109 5.316.215 1.437.117 2.575 1.228 2.705 2.671.097 1.08.187 2.507.187 4.073 0 1.565-.09 2.992-.187 4.072-.13 1.443-1.268 2.554-2.705 2.67A67.42 67.42 0 0 1 10 16.957c-2.135 0-3.999-.109-5.315-.215-1.438-.117-2.576-1.228-2.705-2.671A45.33 45.33 0 0 1 1.792 10c0-1.566.09-2.993.188-4.073.129-1.443 1.267-2.554 2.705-2.67A67.4 67.4 0 0 1 10 3.04z',
+      'M12.233 9.196a.928.928 0 0 1 0 1.608L9.58 12.336a.929.929 0 0 1-1.392-.804V8.468a.929.929 0 0 1 1.392-.803l2.653 1.531z',
+    ],
+  },
+  danmaku: {
+    viewBox: '0 0 20 20',
+    paths: [
+      'M10 4.04c-2.103 0-3.938.107-5.234.212-.959.078-1.705.812-1.79 1.764A44.42 44.42 0 0 0 2.792 10c0 1.527.089 2.924.184 3.982.085.952.831 1.686 1.79 1.764 1.296.105 3.131.212 5.234.212 2.103 0 3.939-.107 5.235-.212.958-.078 1.704-.812 1.79-1.764.095-1.058.183-2.455.183-3.983 0-1.528-.088-2.924-.183-3.983-.086-.952-.832-1.686-1.79-1.764A65.74 65.74 0 0 0 10 4.04zm0-1c2.136 0 4 .109 5.316.215 1.437.117 2.575 1.228 2.705 2.671.097 1.08.187 2.507.187 4.073 0 1.565-.09 2.992-.187 4.072-.13 1.443-1.268 2.554-2.705 2.67A67.42 67.42 0 0 1 10 16.957c-2.135 0-3.999-.109-5.315-.215-1.438-.117-2.576-1.228-2.705-2.671A45.33 45.33 0 0 1 1.792 10c0-1.566.09-2.993.188-4.073.129-1.443 1.267-2.554 2.705-2.67A67.4 67.4 0 0 1 10 3.04z',
+      'M13.292 7.833a.5.5 0 0 1 0 1H8.167a.5.5 0 0 1 0-1h5.125z',
+      'M14.542 11.167a.5.5 0 0 1 0 1H9.417a.5.5 0 0 1 0-1h5.125z',
+      'M6 7.833a.5.5 0 0 1 0 1h-.542a.5.5 0 0 1 0-1H6z',
+      'M7.25 11.167a.5.5 0 0 1 0 1h-.542a.5.5 0 0 1 0-1h.542z',
+    ],
+  },
+  comment: {
+    viewBox: '0 0 24 24',
+    paths: ['M5.75 3.5h12.5A3.75 3.75 0 0 1 22 7.25v7.5a3.75 3.75 0 0 1-3.75 3.75H11l-5.65 3.23A.9.9 0 0 1 4 20.95V18.1a3.75 3.75 0 0 1-2-3.35v-7.5A3.75 3.75 0 0 1 5.75 3.5zm1.5 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm4.75 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm4.75 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z'],
+  },
+  followers: {
+    viewBox: '0 0 24 24',
+    paths: ['M9 11.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 1.75c-4.418 0-8 2.686-8 6a1 1 0 0 0 2 0c0-1.95 2.498-4 6-4 1.378 0 2.58.317 3.546.814a5.53 5.53 0 0 1 1.31-1.57A10.24 10.24 0 0 0 9 13.25zM18 11a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0v-2h-2a1 1 0 1 1 0-2h2v-2a1 1 0 0 1 1-1z'],
+  },
+  like: {
+    viewBox: '0 0 36 36',
+    paths: ['M9.772 30.857v-19.11H7.546a3.687 3.687 0 0 0-3.689 3.678V27.18a3.687 3.687 0 0 0 3.689 3.678h2.226zm2.218 0V11.705c3-1.078 4.704-3.82 5.116-8.369.16-1.781 1.857-2.522 3.474-1.741 1.605.775 2.663 2.73 2.663 5.344 0 1.564-.195 3.166-.585 4.808h7.074a3.696 3.696 0 0 1 3.59 4.581l-2.334 9.468a6.66 6.66 0 0 1-6.46 5.061H11.99z'],
+  },
+  coin: {
+    viewBox: '0 0 28 28',
+    paths: ['M14.045 25.545c-6.351 0-11.5-5.148-11.5-11.5 0-6.35 5.149-11.5 11.5-11.5s11.5 5.15 11.5 11.5c0 3.05-1.212 5.975-3.368 8.132a11.5 11.5 0 0 1-8.132 3.368zM9.662 6.816h8.614c.549 0 .994.406.994.906 0 .5-.445.906-.994.906H14.95v1.662c3.039.154 5.427 2.659 5.436 5.702V17.2a.906.906 0 0 1-1.812 0v-1.208a3.894 3.894 0 0 0-3.624-3.89v8.455a.906.906 0 0 1-1.812 0v-8.455a3.894 3.894 0 0 0-3.624 3.89V17.2a.906.906 0 0 1-1.811 0v-1.208c.009-3.043 2.396-5.548 5.435-5.702V8.628H9.662c-.549 0-.994-.406-.994-.906 0-.5.445-.906.994-.906z'],
+  },
+  favorite: {
+    viewBox: '0 0 28 28',
+    paths: ['M19.807 9.262c-1.063-.163-2.045-.894-2.454-1.868l-1.88-3.897c-.573-1.299-2.373-1.299-3.027 0l-1.8 3.897c-.49.974-1.39 1.705-2.453 1.868l-4.253.649c-1.308.162-1.881 1.786-.9 2.76l3.19 3.248a3.23 3.23 0 0 1 .9 2.842l-.736 4.546c-.246 1.38 1.227 2.354 2.453 1.705l3.599-1.949a3.28 3.28 0 0 1 3.19 0l3.599 1.949c1.226.649 2.617-.325 2.453-1.705l-.818-4.546a3.23 3.23 0 0 1 .9-2.842l3.19-3.248c.981-.974.409-2.598-.9-2.76l-4.253-.65z'],
+  },
+};
 
 function uiIcon(name: IconName): SVGSVGElement {
   const paths: Record<IconName, string[]> = {
@@ -515,6 +573,12 @@ function uiIcon(name: IconName): SVGSVGElement {
     ],
     favorite: [
       'm12 3.5 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
+    ],
+    followers: [
+      'M9.5 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
+      'M3.5 20a6 6 0 0 1 12 0',
+      'M18.5 8v6',
+      'M15.5 11h6',
     ],
     copy: [
       'M9 9h10v11H9z',
@@ -561,11 +625,13 @@ function uiIcon(name: IconName): SVGSVGElement {
       'M6.5 10.5 12 5l5.5 5.5',
     ],
   };
+  const filledSpec = BILIBILI_STAT_ICON_SPECS[name];
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('viewBox', filledSpec?.viewBox ?? '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  paths[name].forEach((d) => {
+  if (filledSpec) svg.setAttribute('data-filled', 'true');
+  (filledSpec?.paths ?? paths[name]).forEach((d) => {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', d);
     svg.append(path);

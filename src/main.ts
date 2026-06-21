@@ -4,11 +4,11 @@ import { isSupportedVideoUrl } from './sources/providers';
 import { Panel } from './ui/panel';
 import { logger } from './utils/logger';
 import { isChatGptPage, startChatGptImageReceiver } from './ai/image/chatgptReceiver';
-import { claimVideoSummaryDocumentRuntime } from './runtime/singleton';
+import { claimVideoLensDocumentRuntime } from './runtime/singleton';
 
 declare global {
   interface Window {
-    __VIDEO_SUMMARY_BOOT__?: {
+    __VIDEO_LENS_BOOT__?: {
       href: string;
       loadedAt: string;
       matched: boolean;
@@ -19,11 +19,11 @@ declare global {
 
 function showBootError(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
-  window.__VIDEO_SUMMARY_BOOT__ = { ...(window.__VIDEO_SUMMARY_BOOT__ ?? bootState()), error: message };
-  document.documentElement.setAttribute('data-video-summary-error', message);
+  window.__VIDEO_LENS_BOOT__ = { ...(window.__VIDEO_LENS_BOOT__ ?? bootState()), error: message };
+  document.documentElement.setAttribute('data-video-lens-error', message);
 
   const badge = document.createElement('div');
-  badge.textContent = `Video Summary 启动失败：${message}`;
+  badge.textContent = `片语启动失败：${message}`;
   badge.style.cssText = [
     'position:fixed',
     'right:18px',
@@ -49,9 +49,9 @@ function bootState() {
 }
 
 async function bootstrap(): Promise<void> {
-  window.__VIDEO_SUMMARY_BOOT__ = bootState();
-  document.documentElement.setAttribute('data-video-summary-boot', JSON.stringify(window.__VIDEO_SUMMARY_BOOT__));
-  console.info('[Video Summary] userscript loaded', window.__VIDEO_SUMMARY_BOOT__);
+  window.__VIDEO_LENS_BOOT__ = bootState();
+  document.documentElement.setAttribute('data-video-lens-boot', JSON.stringify(window.__VIDEO_LENS_BOOT__));
+  console.info('[Video Lens] userscript loaded', window.__VIDEO_LENS_BOOT__);
 
   if (isChatGptPage(location.href)) {
     startChatGptImageReceiver();
@@ -70,7 +70,7 @@ async function bootstrap(): Promise<void> {
   await controller.mount();
 }
 
-if (claimVideoSummaryDocumentRuntime(document)) {
+if (claimVideoLensDocumentRuntime(document)) {
   void bootstrap().catch((error) => {
     logger.error(error);
     showBootError(error);

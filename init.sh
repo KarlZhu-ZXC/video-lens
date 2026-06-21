@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== video-summary harness init ==="
+echo "=== video-lens harness init ==="
 
 if ! command -v pnpm >/dev/null 2>&1; then
   echo "pnpm is required but was not found on PATH." >&2

@@ -6,8 +6,10 @@ export interface VideoInfo {
   aid?: number;
   cid?: number;
   title: string;
+  creatorId?: string;
   creatorName?: string;
   upName?: string;
+  creatorFollowers?: number;
   description?: string;
   duration?: number;
   coverUrl?: string;

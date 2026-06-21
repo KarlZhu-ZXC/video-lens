@@ -3,14 +3,17 @@ import monkey from 'vite-plugin-monkey';
 import packageJson from './package.json';
 
 export const userscriptVersion = packageJson.version;
+export const userscriptName = '片语 · Video Lens';
+export const userscriptNamespace = 'https://github.com/KarlZhu-ZXC/video-lens';
+export const userscriptFileName = 'video-lens.user.js';
 
 export default defineConfig({
   plugins: [
     monkey({
       entry: 'src/main.ts',
       userscript: {
-        name: 'Video Summary',
-        namespace: 'https://github.com/yourname/video-summary',
+        name: userscriptName,
+        namespace: userscriptNamespace,
         version: userscriptVersion,
         description: 'Bilibili / YouTube 视频自动获取字幕并生成流式摘要与交互式对话，支持基于内容的配图生成、双语配置与大模型思考过程可视化',
         author: 'Karl',
@@ -39,7 +42,7 @@ export default defineConfig({
         license: 'MIT',
       },
       build: {
-        fileName: 'video-summary.user.js',
+        fileName: userscriptFileName,
         autoGrant: false,
       },
     }),

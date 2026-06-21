@@ -3,6 +3,11 @@ import type { SubtitleLine, Transcript, VideoInfo } from '../VideoSourceProvider
 export type { SubtitleLine, Transcript, VideoInfo };
 
 export interface BilibiliInitialState {
+  upData?: {
+    mid?: number;
+    name?: string;
+    fans?: number;
+  };
   videoData?: {
     bvid?: string;
     aid?: number;
@@ -14,6 +19,7 @@ export interface BilibiliInitialState {
     pubdate?: number;
     ctime?: number;
     owner?: {
+      mid?: number;
       name?: string;
     };
     stat?: {

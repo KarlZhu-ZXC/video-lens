@@ -248,7 +248,7 @@ export class AppController {
     }
     const link = document.createElement('a');
     link.href = href;
-    link.download = `${sanitizeFileName(this.state.video?.title ?? 'video-summary')}.png`;
+    link.download = `${sanitizeFileName(this.state.video?.title ?? 'video-lens')}.png`;
     link.target = '_blank';
     link.rel = 'noreferrer';
     link.click();
@@ -505,7 +505,7 @@ export function buildSummaryMarkdown(summary: SummaryResult): string {
 }
 
 export function summaryMarkdownFileName(title: string): string {
-  return `${sanitizeFileName(title || 'video-summary')}.md`;
+  return `${sanitizeFileName(title || 'video-lens')}.md`;
 }
 
 export function generatedImageHref(image: GeneratedImage): string {

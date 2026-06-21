@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`video-summary` is a Tampermonkey userscript for Bilibili and YouTube video summaries, insights, and one-image exports.
+`video-lens` (片语 / Video Lens) is a Tampermonkey userscript for Bilibili and YouTube video summaries, follow-up conversations, and image generation.
 
 ## Startup Workflow
 

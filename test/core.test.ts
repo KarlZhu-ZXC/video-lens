@@ -24,7 +24,13 @@ import {
   saveConfig,
   stripSensitiveConfigForStorage,
 } from '../src/store/configStore';
-import { CONFIG_KEY } from '../src/store/types';
+import {
+  CONFIG_KEY,
+  LEGACY_CONFIG_KEY,
+  LEGACY_SUMMARY_CACHE_KEY,
+  SUMMARY_CACHE_KEY,
+} from '../src/store/types';
+import { makeJsonCache } from '../src/store/makeJsonCache';
 import { summaryCache } from '../src/store/summaryCache';
 import { estimateSummaryMaxTokens, runSummaryPipeline } from '../src/summary/summaryPipeline';
 import { askSummaryChat, buildOneImagePrompt, isImageGenerationRequest } from '../src/summary/chatPipeline';
@@ -56,8 +62,9 @@ import {
   shouldShowSummaryToolbar,
   summaryComposerState,
   SUMMARY_CONTEXT_ORDER,
+  videoMetadataItems,
 } from '../src/ui/summaryView';
-import { isVideoSummaryHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
+import { isVideoLensHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
 import { CONNECTION_TEST_LABEL, resolveSecretInput, resolveSecretValueForSave } from '../src/ui/settingsModal';
 import { normalizeAssetUrl } from '../src/utils/url';
 import { DEV_HARNESS_COMMAND, HARNESS_ENTRY_SCRIPT } from '../src/harness/constants';
@@ -65,7 +72,11 @@ import { PANEL_STYLES } from '../src/ui/styles';
 import { getActiveProvider, isSupportedVideoUrl } from '../src/sources/providers';
 import { extractYoutubeVideoId, parseYoutubePlayerResponse } from '../src/sources/youtube/videoInfo';
 import { getYoutubeVideoFromOfficialApi } from '../src/sources/youtube/officialApi';
-import { parseBilibiliStats } from '../src/sources/bilibili/videoInfo';
+import {
+  fetchBilibiliFollowerCount,
+  parseBilibiliPageFollowers,
+  parseBilibiliStats,
+} from '../src/sources/bilibili/videoInfo';
 import {
   buildTargetLanguageTranslatedTracks,
   getYoutubeSubtitleOptions,
@@ -414,6 +425,30 @@ describe('video source providers', () => {
       coins: 6_789,
       favorites: 9_876,
     });
+  });
+
+  it('reads creator followers from Bilibili page state', () => {
+    expect(parseBilibiliPageFollowers({ upData: { fans: 456_789 } })).toBe(456_789);
+    expect(parseBilibiliPageFollowers({ upData: { fans: -1 } })).toBeUndefined();
+  });
+
+  it('fetches Bilibili creator followers by owner mid', async () => {
+    const fetcher = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => ({ data: { follower: 987_654 } }),
+      url,
+    })) as unknown as typeof fetch;
+
+    await expect(fetchBilibiliFollowerCount(12345, fetcher)).resolves.toBe(987_654);
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://api.bilibili.com/x/relation/stat?vmid=12345',
+      { credentials: 'include' },
+    );
+  });
+
+  it('keeps Bilibili video metadata usable when follower lookup fails', async () => {
+    const fetcher = vi.fn(async () => { throw new Error('network'); }) as unknown as typeof fetch;
+    await expect(fetchBilibiliFollowerCount(12345, fetcher)).resolves.toBeUndefined();
   });
 });
 
@@ -820,6 +855,16 @@ describe('summary scroll preservation', () => {
     expect(PANEL_STYLES).toContain('.vs-intent-option {');
   });
 
+  it('shows a custom reasoning chevron and a streaming-only four-second shimmer', () => {
+    expect(PANEL_STYLES).toContain('.vs-thinking summary::-webkit-details-marker');
+    expect(PANEL_STYLES).toContain('.vs-thinking-chevron');
+    expect(PANEL_STYLES).toContain('.vs-thinking[open] .vs-thinking-chevron');
+    expect(PANEL_STYLES).toContain('.vs-thinking-label.streaming');
+    expect(PANEL_STYLES).toContain('animation: vs-thinking-shimmer 4s linear infinite;');
+    expect(PANEL_STYLES).toContain('@keyframes vs-thinking-shimmer');
+    expect(PANEL_STYLES).toContain('50%, 100% { background-position: -120% 0; }');
+  });
+
   it('centers assistant placeholder content and compacts configuration controls', () => {
     const assistantRule = /\.vs-message\.assistant \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     const chipRule = /\.vs-config-chip \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
@@ -830,10 +875,10 @@ describe('summary scroll preservation', () => {
     expect(subtitleRule).toContain('max-width: min(170px, 40%);');
   });
 
-  it('uses a four-column video description grid with a narrow two-column fallback', () => {
+  it('uses a three-column video description grid with a narrow two-column fallback', () => {
     const metaRule = /\.vs-video-meta \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     expect(metaRule).toContain('display: grid;');
-    expect(metaRule).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));');
+    expect(metaRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(PANEL_STYLES).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
   });
 
@@ -1355,7 +1400,8 @@ describe('ui i18n', () => {
   });
 
   it('returns Chinese by default and English when requested', () => {
-    expect(getUiText('zh-CN', 'appName')).toBe('AI总结');
+    expect(getUiText('zh-CN', 'appName')).toBe('片语');
+    expect(getUiText('en-US', 'appName')).toBe('Video Lens');
     expect(getUiText('zh-CN', 'tabs.summary')).toBe('摘要');
     expect(getUiText('en-US', 'tabs.summary')).toBe('Summary');
     expect(getUiText('en-US', 'summary.emptyTitle')).toBe('No summary yet');
@@ -1411,10 +1457,12 @@ describe('harness entrypoint', () => {
 
 describe('route watcher wrappers', () => {
   it('marks wrapped history functions so repeated watchers can avoid double wrapping', () => {
-    const wrapped = Object.assign(function pushState() {}, { __videoSummaryRouteWatcher: true });
+    const wrapped = Object.assign(function pushState() {}, { __videoLensRouteWatcher: true });
+    const legacyWrapped = Object.assign(function pushState() {}, { __videoSummaryRouteWatcher: true });
 
-    expect(isVideoSummaryHistoryWrapper(wrapped)).toBe(true);
-    expect(isVideoSummaryHistoryWrapper(function pushState() {})).toBe(false);
+    expect(isVideoLensHistoryWrapper(wrapped)).toBe(true);
+    expect(isVideoLensHistoryWrapper(legacyWrapped)).toBe(true);
+    expect(isVideoLensHistoryWrapper(function pushState() {})).toBe(false);
   });
 });
 
@@ -1484,9 +1532,102 @@ describe('video statistics presentation', () => {
       'favorites',
     ]);
   });
+
+  it('orders creator, followers, upload time, and engagement in a 3x3 grid', () => {
+    const items = videoMetadataItems({
+      source: 'bilibili',
+      sourceId: 'BV-meta',
+      title: 'Video',
+      upName: '测试 UP',
+      creatorFollowers: 123_456,
+      publishedAt: 1_735_689_600,
+      stats: {
+        views: 1,
+        danmaku: 2,
+        comments: 3,
+        likes: 4,
+        coins: 5,
+        favorites: 6,
+      },
+      url: 'https://www.bilibili.com/video/BV-meta',
+    }, 'zh-CN');
+
+    expect(items.map((item) => item.key)).toEqual([
+      'creator',
+      'followers',
+      'uploaded',
+      'views',
+      'danmaku',
+      'comments',
+      'likes',
+      'coins',
+      'favorites',
+    ]);
+    expect(items[1]).toMatchObject({ icon: 'followers', label: '12.3万' });
+  });
 });
 
 describe('sensitive config storage', () => {
+  it('migrates legacy config to the new key without exposing localStorage secrets', () => {
+    const data = new Map<string, string>();
+    data.set(LEGACY_CONFIG_KEY, JSON.stringify({
+      ...DEFAULT_CONFIG,
+      textAi: { ...DEFAULT_CONFIG.textAi, model: 'legacy-model', apiKey: 'legacy-secret' },
+    }));
+    Object.defineProperty(globalThis, 'GM_getValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'GM_setValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+
+    expect(loadConfig().textAi.model).toBe('legacy-model');
+    expect(data.get(CONFIG_KEY)).toBeTruthy();
+    expect(data.get(CONFIG_KEY)).not.toContain('legacy-secret');
+    expect(data.get(LEGACY_CONFIG_KEY)).toContain('legacy-secret');
+  });
+
+  it('prefers new configuration over legacy configuration', () => {
+    const data = new Map<string, string>([
+      [CONFIG_KEY, JSON.stringify({ ...DEFAULT_CONFIG, textAi: { ...DEFAULT_CONFIG.textAi, model: 'new-model' } })],
+      [LEGACY_CONFIG_KEY, JSON.stringify({ ...DEFAULT_CONFIG, textAi: { ...DEFAULT_CONFIG.textAi, model: 'old-model' } })],
+    ]);
+    Object.defineProperty(globalThis, 'GM_getValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+
+    expect(loadConfig().textAi.model).toBe('new-model');
+  });
+
+  it('migrates legacy JSON caches without deleting the old cache', () => {
+    const data = new Map<string, string>();
+    data.set(LEGACY_SUMMARY_CACHE_KEY, JSON.stringify({
+      key: { updatedAt: 1, value: { content: 'legacy summary' } },
+    }));
+    Object.defineProperty(globalThis, 'GM_getValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'GM_setValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+    const cache = makeJsonCache<{ content: string }>(SUMMARY_CACHE_KEY, LEGACY_SUMMARY_CACHE_KEY);
+
+    expect(cache.get('key')).toEqual({ content: 'legacy summary' });
+    expect(data.get(SUMMARY_CACHE_KEY)).toBe(data.get(LEGACY_SUMMARY_CACHE_KEY));
+    expect(data.has(LEGACY_SUMMARY_CACHE_KEY)).toBe(true);
+  });
+
   it('strips API keys before falling back to page localStorage', () => {
     const config = {
       ...DEFAULT_CONFIG,

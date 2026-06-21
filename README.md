@@ -1,6 +1,6 @@
-# video-summary
+# 片语 · Video Lens
 
-Bilibili / YouTube 视频页 userscript：读取视频信息和字幕，通过 OpenAI-compatible 文本模型生成流式摘要，支持在摘要结果下方进行连续的对话交互问答，并在对话中支持生成基于视频内容的配图。
+Video Lens（中文名“片语”）是运行在 Bilibili / YouTube 视频页的 userscript：读取视频信息和字幕，通过 OpenAI-compatible 文本模型生成流式摘要，支持在摘要结果下方进行连续的对话交互问答，并在对话中支持生成基于视频内容的配图。
 
 ## 使用
 
@@ -9,7 +9,7 @@ pnpm install
 pnpm build
 ```
 
-构建产物在 `dist/video-summary.user.js`，安装到 Tampermonkey 后打开 Bilibili 视频页或 YouTube `watch` / `shorts` 页面使用。
+构建产物在 `dist/video-lens.user.js`，安装到 Tampermonkey 后打开 Bilibili 视频页或 YouTube `watch` / `shorts` 页面使用。
 
 脚本声明 Tampermonkey grant，用于配置和跨标签任务存储、通过 `GM_xmlhttpRequest` 兼容跨域 API/图片下载、打开 ChatGPT Project，以及复制。
 
@@ -17,7 +17,7 @@ pnpm build
 
 图片设置提供 `API 生图` 和 `ChatGPT 网页生图（实验）` 两个选项。网页模式的使用步骤：
 
-1. 在 ChatGPT 新建一个只用于 video-summary 生图的 Project。
+1. 在 ChatGPT 新建一个只用于 Video Lens 生图的 Project。
 2. 把 Project 根页的完整 `https://chatgpt.com/g/g-p-.../project` URL 填入图片设置并保存。
 3. 刷新并保持该 Project 根页打开；设置中的连通性测试应显示接收端在线。
 4. 在视频摘要中点击“生图”。脚本每次会在该 Project 内新建独立聊天，自动填词、发送、等待图片并回传视频页；视频页确认图片已成功接收后，ChatGPT 页才返回 Project 根页。
@@ -64,7 +64,7 @@ pnpm test
 - 摘要页把字幕语言选择合并到模型配置胶囊中，切换只更新选择，重新生成时才读取新字幕，并提供单视频缓存清理和全量缓存清理
 - 初始摘要和后续问答会流式展开模型思考过程，完成后折叠并显示耗时；最新 Agent 回复提供“提炼核心观点 / 列出行动建议 / 生成配图”固定快捷意图
 - 长字幕以最多两个并发请求生成分段摘要；分段正文不进入摘要区，空分段会重试一次，整体合并不完整会再合并一次，仍异常则明确报错
-- 视频卡片以 4×2 Description 网格显示 UP 主、上传时间及平台可稳定读取的播放、弹幕、评论、点赞、投币和收藏统计；缺失项不显示
+- 视频卡片以 3×3 Description 网格依次显示 UP 主、粉丝、上传时间、播放、弹幕、评论、点赞、投币和收藏；缺失项不显示
 - 所有 Tab 面板宽度通过侧边拖拽调整并持久化
 - HTTPS 资源 URL 规范化，减少 HTTPS 页面中的 Mixed Content warning
 - SPA 路由监听带 history wrapper 标记；Bilibili / YouTube 页面内切换视频时会短暂重试读取，避免拿到旧视频信息

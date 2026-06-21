@@ -37,7 +37,10 @@ export function renderAiResponse(content: string, reasoning = '', options: AiRes
 
   if (disclosure.visible) {
     root.append(el('details', { class: 'vs-thinking', open: disclosure.open }, [
-      el('summary', {}, [disclosure.label]),
+      el('summary', {}, [
+        el('span', { class: 'vs-thinking-chevron', 'aria-hidden': 'true' }),
+        el('span', { class: `vs-thinking-label${options.streaming ? ' streaming' : ''}` }, [disclosure.label]),
+      ]),
       el('div', { class: 'vs-thinking-content' }, [renderMarkdown(reasoningText)]),
     ]));
   }

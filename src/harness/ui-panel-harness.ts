@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG } from '../store/configStore';
 import { createInitialState } from '../app/AppState';
 import type { AppController } from '../app/AppController';
 
-const GENERATED_IMAGE_FIXTURE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#18181b"/><circle cx="620" cy="180" r="130" fill="#7c3aed"/><text x="72" y="570" fill="#a78bfa" font-family="sans-serif" font-size="34">VIDEO SUMMARY</text><text x="72" y="650" fill="#fafafa" font-family="sans-serif" font-size="64" font-weight="700">Core Insight</text></svg>');
+const GENERATED_IMAGE_FIXTURE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="#18181b"/><circle cx="620" cy="180" r="130" fill="#7c3aed"/><text x="72" y="570" fill="#a78bfa" font-family="sans-serif" font-size="34">VIDEO LENS</text><text x="72" y="650" fill="#fafafa" font-family="sans-serif" font-size="64" font-weight="700">Core Insight</text></svg>');
 
 const listeners = new Set<() => void>();
 const controller = {
@@ -20,6 +20,7 @@ const controller = {
       cid: 1,
       title: 'Understanding Large Language Models in 2024',
       upName: 'AI Research Lab',
+      creatorFollowers: 128_600,
       coverUrl:
         'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 240 160%22%3E%3Crect width=%22240%22 height=%22160%22 fill=%22%2309090b%22/%3E%3Ccircle cx=%22178%22 cy=%2252%22 r=%2244%22 fill=%22%237c3aed%22 opacity=%22.45%22/%3E%3Cpath d=%22M30 118h180%22 stroke=%22%2334d399%22 stroke-width=%226%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M44 86h94%22 stroke=%22%23a78bfa%22 stroke-width=%226%22 stroke-linecap=%22round%22/%3E%3C/svg%3E',
       duration: 754,
@@ -171,7 +172,7 @@ if (scenario === 'settings-chatgpt') {
     imageAi: {
       ...controller.config.imageAi,
       mode: 'chatgpt_web',
-      chatgptConversationUrl: 'https://chatgpt.com/g/g-p-video-summary/project',
+      chatgptConversationUrl: 'https://chatgpt.com/g/g-p-video-lens/project',
     },
     ui: { ...controller.config.ui, collapsed: false, defaultTab: 'settings' },
   };
@@ -245,4 +246,4 @@ if (scenario === 'image-error') {
 
 const panel = new Panel(controller);
 panel.render();
-(window as any).__VIDEO_SUMMARY_PANEL_HARNESS__ = { controller, panel, listeners };
+(window as any).__VIDEO_LENS_PANEL_HARNESS__ = { controller, panel, listeners };

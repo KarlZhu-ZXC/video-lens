@@ -1,8 +1,8 @@
-# video-summary V1 Spec
+# Video Lens V1 Spec
 
 ## 目标与运行形态
 
-`video-summary` 是运行在 Tampermonkey 中的 Bilibili / YouTube 视频总结 userscript。项目使用 pnpm、Vite、TypeScript 和 `vite-plugin-monkey`，UI 由原生 DOM 与 Shadow DOM 构成。
+Video Lens（中文名“片语”）是运行在 Tampermonkey 中的 Bilibili / YouTube 视频总结 userscript。项目使用 pnpm、Vite、TypeScript 和 `vite-plugin-monkey`，UI 由原生 DOM 与 Shadow DOM 构成。
 
 支持页面：
 
@@ -20,7 +20,7 @@
 
 摘要支持流式输出、长字幕分块/合并、Markdown 安全子集渲染、复制和 Markdown 导出。模型 reasoning 在初始摘要和后续问答中进入同一折叠区：流式时展开显示 `Thinking`，正文开始或请求完成后折叠为 `Thought for <duration>`。手动“重新生成”仍会重新执行总结流程。摘要完成后，可在下方对话框进行基于当前视频内容的连续问答。
 
-长字幕分段使用并发上限 2，并按原字幕索引保存结果。分段阶段只更新完成进度，不通过 `onDelta` 渲染分段正文。空分段自动重试一次，第二次仍为空则明确失败；整体合并结果为空、等同于单个分段或仍带明显的 `第 1/3 段` 标记时自动重试一次，第二次仍不完整则报错，不用分段内容冒充最终摘要。视频卡片通过统一 `VideoInfo.stats` 显示 provider 可用的统计数据，并将 UP 主、上传时间和统计项排成 4×2 Description 网格；缺失项不显示。
+长字幕分段使用并发上限 2，并按原字幕索引保存结果。分段阶段只更新完成进度，不通过 `onDelta` 渲染分段正文。空分段自动重试一次，第二次仍为空则明确失败；整体合并结果为空、等同于单个分段或仍带明显的 `第 1/3 段` 标记时自动重试一次，第二次仍不完整则报错，不用分段内容冒充最终摘要。视频卡片通过统一 `VideoInfo.stats` 显示 provider 可用的统计数据，并将 UP 主、粉丝、上传时间和六项互动统计排成 3×3 Description 网格；缺失项不显示。
 
 ## 视频与字幕
 

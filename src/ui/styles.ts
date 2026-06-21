@@ -724,7 +724,7 @@ textarea::-webkit-scrollbar-thumb,
 
 .vs-video-meta {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   min-width: 0;
   width: 100%;
   gap: 7px 10px;
@@ -762,6 +762,11 @@ textarea::-webkit-scrollbar-thumb,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vs-video-meta-item svg[data-filled="true"] {
+  fill: currentColor;
+  stroke: none;
 }
 
 .vs-config-chip svg {
@@ -1138,14 +1143,59 @@ textarea::-webkit-scrollbar-thumb,
 }
 
 .vs-thinking summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   cursor: pointer;
   color: var(--vs-muted);
   font-weight: 650;
-  list-style-position: outside;
+  list-style: none;
+}
+
+.vs-thinking summary::marker,
+.vs-thinking summary::-webkit-details-marker {
+  display: none;
+}
+
+.vs-thinking-chevron {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+
+.vs-thinking[open] .vs-thinking-chevron {
+  transform: rotate(45deg);
+}
+
+.vs-thinking-label.streaming {
+  background: linear-gradient(
+    90deg,
+    var(--vs-muted) 0%,
+    var(--vs-muted) 38%,
+    var(--vs-text) 50%,
+    var(--vs-muted) 62%,
+    var(--vs-muted) 100%
+  );
+  background-position: 120% 0;
+  background-size: 240% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: vs-thinking-shimmer 4s linear infinite;
 }
 
 .vs-thinking summary:hover {
   color: var(--vs-text);
+}
+
+@keyframes vs-thinking-shimmer {
+  0% { background-position: 120% 0; }
+  50%, 100% { background-position: -120% 0; }
 }
 
 .vs-thinking-content {
@@ -2019,6 +2069,12 @@ select:focus {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+  }
+
+  .vs-thinking-label.streaming {
+    animation: none !important;
+    background: none;
+    color: var(--vs-muted);
   }
 }
 `;
