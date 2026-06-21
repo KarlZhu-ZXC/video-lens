@@ -100,5 +100,5 @@
 
 - [x] Run strict TypeScript unused checks, `pnpm test`, `pnpm build`, JSON parsing, stale-name scans, and `git diff --check`.
 - [x] Record verification evidence and commit all implementation changes.
-- [ ] Push a ready PR, merge it, and rerun tests/build on merged `main`.
-- [ ] Rename the GitHub repository to `video-lens`, update local `origin`, and verify the new URL and default branch.
+- [x] Push a ready PR, merge it, and rerun tests/build on merged `main`.
+- [x] Rename the GitHub repository to `video-lens`, update local `origin`, and verify the new URL and default branch.
