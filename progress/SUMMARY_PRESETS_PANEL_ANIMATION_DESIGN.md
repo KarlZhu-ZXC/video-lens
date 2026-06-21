@@ -43,11 +43,14 @@ selector. A sixth `summary_custom` option represents one global user-authored
 template. The custom template is stored as a deterministic custom preset and is
 used verbatim for both output languages.
 
-The General settings section contains:
+The General settings section contains the auto-run control and one compact Summary
+Preset setting. The preset setting is a wrapping radio-chip group containing the
+five built-ins plus Custom, rather than separate preset and custom-prompt fields.
 
-1. Auto-run summary.
-2. Preferred summary preset.
-3. A custom prompt textarea, visible only when Custom is selected.
+Selecting Custom for the first time expands its textarea immediately. After valid
+custom text has been saved, reopening settings keeps the editor collapsed and
+shows an `Edit custom prompt` disclosure instead. Expanding or collapsing never
+clears the saved text. Selecting another preset fully hides the custom editor.
 
 Saving Custom with empty text is rejected inline. Changing the selected preset or
 custom text affects every video, just like the interface language setting. It does
@@ -100,7 +103,8 @@ prompt revision from reusing stale output with the same preset ID.
   timeline formatting, long-video target-preset propagation, and cache matching.
 - Existing tests continue importing v1 where they specifically verify v1 stability;
   new runtime tests import v2.
-- UI tests cover General-setting visibility and validation helpers.
+- UI tests cover radio-chip selection, first-use expansion, saved-editor default
+  collapse, retained custom text, and empty-custom validation helpers.
 - Animation helpers cover transition guards and reduced-motion timing.
 - Harness checks opening, closing, both panel sides, reduced motion, built-in preset
   selection, custom prompt editing, and retained per-video subtitle selection.
