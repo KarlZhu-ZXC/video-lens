@@ -4,6 +4,7 @@ import {
   userscriptFileName,
   userscriptName,
   userscriptNamespace,
+  userscriptAuthor,
   userscriptVersion,
 } from '../vite.config';
 
@@ -15,7 +16,8 @@ describe('userscript build metadata', () => {
   it('uses the Video Lens package and userscript identity', () => {
     expect(packageJson.name).toBe('video-lens');
     expect(userscriptName).toBe('片语 · Video Lens');
-    expect(userscriptNamespace).toContain('/video-lens');
+    expect(userscriptNamespace).toBe('urn:video-lens:userscript');
+    expect(userscriptAuthor).toBe('Video Lens Contributors');
     expect(userscriptFileName).toBe('video-lens.user.js');
   });
 });

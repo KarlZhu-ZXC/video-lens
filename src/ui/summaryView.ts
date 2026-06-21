@@ -6,6 +6,7 @@ import { renderAiResponse } from './aiResponse';
 import { normalizeAssetUrl } from '../utils/url';
 import type { SubtitleOption, Transcript, VideoInfo, VideoStats } from '../sources/VideoSourceProvider';
 import type { LocalConfig } from '../store/types';
+import { createImagePreview } from './imagePreview';
 
 export const SUMMARY_CONTEXT_ORDER = ['video', 'configuration'] as const;
 export const FIXED_FOLLOW_UP_INTENTS = [
@@ -162,9 +163,11 @@ export function renderChatMessage(
   let body: HTMLElement;
 
   if (item.generatedImage) {
-    body = el('div', { class: 'vs-chat-image' }, [
-      el('img', { src: normalizeAssetUrl(item.generatedImage.dataUrl || item.generatedImage.url || ''), alt: 'Generated Image' })
-    ]);
+    body = createImagePreview({
+      src: normalizeAssetUrl(item.generatedImage.dataUrl || item.generatedImage.url || ''),
+      alt: 'Generated Image',
+      onDownload: () => controller.downloadGeneratedImage(item.generatedImage),
+    });
   } else if (item.role === 'assistant') {
     body = renderAiResponse(item.content, item.reasoning, {
       language: controller.config.ui.language,
@@ -341,6 +344,10 @@ export function selectedSubtitleLabel(
   return selected?.label || transcript?.language || '未读取';
 }
 
+export function shouldRenderSubtitleSelect(optionCount: number): boolean {
+  return optionCount > 0;
+}
+
 function renderSubtitleConfigChip(
   controller: AppController,
   transcript: Pick<Transcript, 'language'> | undefined,
@@ -350,7 +357,9 @@ function renderSubtitleConfigChip(
     controller.state.selectedSubtitleId,
     transcript,
   );
-  if (controller.state.subtitleOptions.length < 2) return renderConfigChip('captions', `字幕：${label}`);
+  if (!shouldRenderSubtitleSelect(controller.state.subtitleOptions.length)) {
+    return renderConfigChip('captions', `字幕：${label}`);
+  }
 
   const select = el('select', { 'aria-label': '字幕语言' }) as HTMLSelectElement;
   controller.state.subtitleOptions.forEach((option) => {
@@ -517,17 +526,9 @@ const BILIBILI_STAT_ICON_SPECS: Partial<Record<IconName, { viewBox: string; path
     viewBox: '0 0 24 24',
     paths: ['M5.75 3.5h12.5A3.75 3.75 0 0 1 22 7.25v7.5a3.75 3.75 0 0 1-3.75 3.75H11l-5.65 3.23A.9.9 0 0 1 4 20.95V18.1a3.75 3.75 0 0 1-2-3.35v-7.5A3.75 3.75 0 0 1 5.75 3.5zm1.5 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm4.75 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm4.75 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z'],
   },
-  followers: {
-    viewBox: '0 0 24 24',
-    paths: ['M9 11.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 1.75c-4.418 0-8 2.686-8 6a1 1 0 0 0 2 0c0-1.95 2.498-4 6-4 1.378 0 2.58.317 3.546.814a5.53 5.53 0 0 1 1.31-1.57A10.24 10.24 0 0 0 9 13.25zM18 11a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0v-2h-2a1 1 0 1 1 0-2h2v-2a1 1 0 0 1 1-1z'],
-  },
   like: {
     viewBox: '0 0 36 36',
     paths: ['M9.772 30.857v-19.11H7.546a3.687 3.687 0 0 0-3.689 3.678V27.18a3.687 3.687 0 0 0 3.689 3.678h2.226zm2.218 0V11.705c3-1.078 4.704-3.82 5.116-8.369.16-1.781 1.857-2.522 3.474-1.741 1.605.775 2.663 2.73 2.663 5.344 0 1.564-.195 3.166-.585 4.808h7.074a3.696 3.696 0 0 1 3.59 4.581l-2.334 9.468a6.66 6.66 0 0 1-6.46 5.061H11.99z'],
-  },
-  coin: {
-    viewBox: '0 0 28 28',
-    paths: ['M14.045 25.545c-6.351 0-11.5-5.148-11.5-11.5 0-6.35 5.149-11.5 11.5-11.5s11.5 5.15 11.5 11.5c0 3.05-1.212 5.975-3.368 8.132a11.5 11.5 0 0 1-8.132 3.368zM9.662 6.816h8.614c.549 0 .994.406.994.906 0 .5-.445.906-.994.906H14.95v1.662c3.039.154 5.427 2.659 5.436 5.702V17.2a.906.906 0 0 1-1.812 0v-1.208a3.894 3.894 0 0 0-3.624-3.89v8.455a.906.906 0 0 1-1.812 0v-8.455a3.894 3.894 0 0 0-3.624 3.89V17.2a.906.906 0 0 1-1.811 0v-1.208c.009-3.043 2.396-5.548 5.435-5.702V8.628H9.662c-.549 0-.994-.406-.994-.906 0-.5.445-.906.994-.906z'],
   },
   favorite: {
     viewBox: '0 0 28 28',
@@ -535,8 +536,7 @@ const BILIBILI_STAT_ICON_SPECS: Partial<Record<IconName, { viewBox: string; path
   },
 };
 
-function uiIcon(name: IconName): SVGSVGElement {
-  const paths: Record<IconName, string[]> = {
+const UI_ICON_PATHS: Record<IconName, string[]> = {
     article: [
       'M7 3.5h7.2L19 8.3V20.5H7z',
       'M14 3.5V9h5',
@@ -567,18 +567,23 @@ function uiIcon(name: IconName): SVGSVGElement {
       'M4 10.5h4.5v8.6H4z',
     ],
     coin: [
-      'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z',
-      'M9 8.5h5a2 2 0 0 1 0 4H9z',
-      'M9 12.5h5.5a2 2 0 0 1 0 4H9z',
+      // Tabler Coin Bitcoin (MIT) stays legible at the 15px metadata size.
+      'M3 12a9 9 0 1 0 18 0 9 9 0 1 0-18 0',
+      'M9 8h4.09c1.055 0 1.91.895 1.91 2s-.855 2-1.91 2c1.055 0 1.91.895 1.91 2s-.855 2-1.91 2H9',
+      'M10 12h4',
+      'M10 7v10',
+      'M13 7v1',
+      'M13 16v1',
     ],
     favorite: [
       'm12 3.5 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
     ],
     followers: [
-      'M9.5 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
-      'M3.5 20a6 6 0 0 1 12 0',
-      'M18.5 8v6',
-      'M15.5 11h6',
+      // Lucide Users (ISC) communicates an audience count rather than a follow action.
+      'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+      'M16 3.128a4 4 0 0 1 0 7.744',
+      'M22 21v-2a4 4 0 0 0-3-3.87',
+      'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
     ],
     copy: [
       'M9 9h10v11H9z',
@@ -624,14 +629,26 @@ function uiIcon(name: IconName): SVGSVGElement {
       'M12 19V5',
       'M6.5 10.5 12 5l5.5 5.5',
     ],
+};
+
+export function videoMetadataIconSpec(name: IconName): { viewBox: string; filled: boolean; paths: string[] } {
+  const filledSpec = BILIBILI_STAT_ICON_SPECS[name];
+  return {
+    viewBox: filledSpec?.viewBox ?? '0 0 24 24',
+    filled: Boolean(filledSpec),
+    paths: filledSpec?.paths ?? UI_ICON_PATHS[name],
   };
+}
+
+function uiIcon(name: IconName): SVGSVGElement {
+  const spec = videoMetadataIconSpec(name);
   const filledSpec = BILIBILI_STAT_ICON_SPECS[name];
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', filledSpec?.viewBox ?? '0 0 24 24');
+  svg.setAttribute('viewBox', spec.viewBox);
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
   if (filledSpec) svg.setAttribute('data-filled', 'true');
-  (filledSpec?.paths ?? paths[name]).forEach((d) => {
+  spec.paths.forEach((d) => {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', d);
     svg.append(path);

@@ -46,6 +46,12 @@ pnpm dev:harness
 pnpm test
 ```
 
+## 发布安全
+
+仓库和构建产物不包含预置 API Key、OAuth Token 或其他用户凭据。文本模型、图片模型和
+YouTube API 凭据仅由用户在设置页填写，并存入 Tampermonkey storage；密码输入框不会回填
+已保存值。用于可选集成测试的 `.env.local` 已被 Git 忽略，且生产源码不会读取或打包该文件。
+
 更多功能说明见 [FEATURES.md](./FEATURES.md)，当前进度和待办分别记录在
 [progress/README.md](./progress/README.md) 与
 [progress/PROJECT_REVIEW_RECOMMENDATIONS.md](./progress/PROJECT_REVIEW_RECOMMENDATIONS.md)。
@@ -57,6 +63,7 @@ pnpm test
 - OpenAI-compatible 文本摘要，支持基于摘要的自由对话
 - 流式摘要渲染、Markdown 正文渲染；模型 reasoning (如 DeepSeek 思考过程) 可视化展开
 - 支持在对话交互中根据用户意图自动识别并通过图片 API 或 ChatGPT 网页生成相关配图
+- 生成图以内嵌预览组件展示；点击可进入全屏预览，并支持缩放、拖动、左右旋转、恢复适配尺寸、下载和快捷关闭
 - Shadow DOM 本地面板、极简的全屏高度对话流布局、设置、Tampermonkey 配置存储、本地缓存
 - 请求统一使用自动模式：文本优先流式 fetch，必要时回退 GM XHR；图片请求也自动选择可用通道
 - 设置页支持真实 API 连通性测试；已保存 API Key 不会回填到密码输入框，留空保存会继续使用旧 key；表单有未保存更改时切换 Tab 会先确认是否保存

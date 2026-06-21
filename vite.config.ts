@@ -4,7 +4,8 @@ import packageJson from './package.json';
 
 export const userscriptVersion = packageJson.version;
 export const userscriptName = '片语 · Video Lens';
-export const userscriptNamespace = 'https://github.com/KarlZhu-ZXC/video-lens';
+export const userscriptNamespace = 'urn:video-lens:userscript';
+export const userscriptAuthor = 'Video Lens Contributors';
 export const userscriptFileName = 'video-lens.user.js';
 
 export default defineConfig({
@@ -16,7 +17,7 @@ export default defineConfig({
         namespace: userscriptNamespace,
         version: userscriptVersion,
         description: 'Bilibili / YouTube 视频自动获取字幕并生成流式摘要与交互式对话，支持基于内容的配图生成、双语配置与大模型思考过程可视化',
-        author: 'Karl',
+        author: userscriptAuthor,
         match: ['*://*.bilibili.com/*', '*://bilibili.com/*', '*://*.youtube.com/*', 'https://chatgpt.com/*'],
         connect: [
           'youtube.com',

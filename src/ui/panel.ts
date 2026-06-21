@@ -176,7 +176,7 @@ export class Panel {
     if (this.activeTab === 'settings') {
       return { title: t('settings.title'), caption: t('settings.caption') };
     }
-    return { title: t('appName') };
+    return { title: t('summary.pageTitle') };
   }
 
   private renderRail(): HTMLElement {
@@ -448,11 +448,9 @@ type PanelIconName = 'settings' | 'summary' | 'collapse' | 'close';
 export function panelIconPaths(name: PanelIconName): string[] {
   const icons: Record<PanelIconName, string[]> = {
     summary: [
-      'M7 3.5h7.2L19 8.3V20.5H7z',
-      'M14 3.5V9h5',
-      'M10 12.5h6',
-      'M10 15.5h5',
-      'M10 18.5h3.5',
+      'M12 3l1.15 3.1L16.5 7.5l-3.35 1.4L12 12l-1.15-3.1L7.5 7.5l3.35-1.4z',
+      'M18 12l.75 2.25L21 15l-2.25.75L18 18l-.75-2.25L15 15l2.25-.75z',
+      'M6 13l.9 2.1L9 16l-2.1.9L6 19l-.9-2.1L3 16l2.1-.9z',
     ],
 
     settings: [

@@ -27,6 +27,7 @@ const ZH = {
     saveSettings: '保存设置',
   },
   summary: {
+    pageTitle: '片语-AI总结',
     title: '视频摘要',
     captionIdle: '识别字幕后生成摘要',
     upPrefix: 'UP：',
@@ -100,6 +101,7 @@ const EN: UiDict = {
     saveSettings: 'Save Settings',
   },
   summary: {
+    pageTitle: 'Video Lens - AI Summary',
     title: 'Video Summary',
     captionIdle: 'Read subtitles before generating a summary',
     upPrefix: 'Creator: ',

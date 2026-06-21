@@ -57,18 +57,26 @@ import {
   hasRenderableSummaryOutput,
   FIXED_FOLLOW_UP_INTENTS,
   selectedSubtitleLabel,
+  shouldRenderSubtitleSelect,
   shouldShowFollowUpIntents,
   videoStatItems,
   shouldShowSummaryToolbar,
   summaryComposerState,
   SUMMARY_CONTEXT_ORDER,
   videoMetadataItems,
+  videoMetadataIconSpec,
 } from '../src/ui/summaryView';
 import { isVideoLensHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
 import { CONNECTION_TEST_LABEL, resolveSecretInput, resolveSecretValueForSave } from '../src/ui/settingsModal';
 import { normalizeAssetUrl } from '../src/utils/url';
 import { DEV_HARNESS_COMMAND, HARNESS_ENTRY_SCRIPT } from '../src/harness/constants';
 import { PANEL_STYLES } from '../src/ui/styles';
+import {
+  IMAGE_PREVIEW_ACTIONS,
+  IMAGE_PREVIEW_SCALES,
+  imagePreviewTransform,
+  nextImagePreviewScale,
+} from '../src/ui/imagePreview';
 import { getActiveProvider, isSupportedVideoUrl } from '../src/sources/providers';
 import { extractYoutubeVideoId, parseYoutubePlayerResponse } from '../src/sources/youtube/videoInfo';
 import { getYoutubeVideoFromOfficialApi } from '../src/sources/youtube/officialApi';
@@ -87,22 +95,16 @@ import {
 } from '../src/sources/youtube/subtitle';
 
 describe('renderPrompt', () => {
-  it('replaces known variables and leaves missing variables empty', () => {
+  it('renders compatible localized prompt templates', () => {
     expect(renderPrompt('标题：{{title}} 作者：{{upName}} 空：{{missing}}', { title: '测试视频' })).toBe(
       '标题：测试视频 作者： 空：',
     );
-  });
-
-  it('supports platform-neutral creator variables while preserving upName compatibility', () => {
     expect(
       renderPrompt('创作者：{{creatorName}} / {{upName}} 平台：{{platform}}', {
-        creatorName: 'Karl',
+        creatorName: 'Demo Creator',
         platform: 'YouTube',
       }),
-    ).toBe('创作者：Karl / Karl 平台：YouTube');
-  });
-
-  it('provides English templates for all built-in text generation prompts used by summary flows', () => {
+    ).toBe('创作者：Demo Creator / Demo Creator 平台：YouTube');
     const textPromptTypes = new Set(['summary', 'chunk_summary', 'merge_summary', 'video_insights']);
     const prompts = BUILT_IN_PROMPTS.filter((prompt) => textPromptTypes.has(prompt.type));
 
@@ -119,7 +121,7 @@ describe('chunkText', () => {
 });
 
 describe('parseOpenAIStreamDeltas', () => {
-  it('extracts streamed content and reasoning deltas', () => {
+  it('parses reasoning, partial lines, and compact SSE fields', () => {
     const deltas = parseOpenAIStreamDeltas(
       [
         'data: {"choices":[{"delta":{"reasoning_content":"想一下","content":""}}]}',
@@ -131,15 +133,9 @@ describe('parseOpenAIStreamDeltas', () => {
       { content: '', reasoning: '想一下' },
       { content: '# 结论', reasoning: '' },
     ]);
-  });
-
-  it('keeps partial SSE lines until the next chunk arrives', () => {
     const parse = createOpenAIStreamParser();
     expect(parse('data: {"choices":[{"delta":{"content":"Hel')).toEqual([]);
     expect(parse('lo"}}]}\n')).toEqual([{ content: 'Hello', reasoning: '' }]);
-  });
-
-  it('accepts SSE data fields without a space after the colon', () => {
     expect(parseOpenAIStreamDeltas('data:{"choices":[{"delta":{"content":"ok"}}]}')[0]?.content).toBe('ok');
   });
 });
@@ -729,15 +725,12 @@ describe('YouTube source parsing', () => {
 });
 
 describe('extractThinkBlocks', () => {
-  it('moves think tags out of visible content', () => {
+  it('extracts complete and split think blocks', () => {
     expect(extractThinkBlocks('<think>推理过程</think># 结论')).toEqual({
       content: '# 结论',
       reasoning: '推理过程',
       inThink: false,
     });
-  });
-
-  it('tracks split think tags across streamed chunks', () => {
     const first = extractThinkBlocks('<think>推理', false);
     const second = extractThinkBlocks('过程</think># 结论', first.inThink);
     expect(first).toEqual({ content: '', reasoning: '推理', inThink: true });
@@ -746,7 +739,7 @@ describe('extractThinkBlocks', () => {
 });
 
 describe('reasoning timing', () => {
-  it('starts on reasoning and stops on the first visible content', () => {
+  it('tracks, finalizes, and safely spreads reasoning timing', () => {
     expect(updateReasoningTiming({}, { reasoning: '分析' }, 1_000)).toEqual({
       reasoningStartedAt: 1_000,
     });
@@ -760,18 +753,12 @@ describe('reasoning timing', () => {
       { content: '正文' },
       4_500,
     )).toEqual({ reasoningStartedAt: 1_000, reasoningDurationMs: 3_500 });
-  });
-
-  it('finalizes reasoning-only requests and formats their duration', () => {
     expect(finalizeReasoningTiming({ reasoningStartedAt: 2_000 }, 99_000)).toEqual({
       reasoningStartedAt: 2_000,
       reasoningDurationMs: 97_000,
     });
     expect(formatReasoningDuration(97_000)).toBe('1m 37s');
     expect(formatReasoningDuration(400)).toBe('<1s');
-  });
-
-  it('only returns timing fields so spreading does not clobber streaming summary fields', () => {
     const polluted = {
       content: 'stale content',
       reasoning: 'stale reasoning',
@@ -817,45 +804,28 @@ describe('reasoning disclosure', () => {
 });
 
 describe('summary scroll preservation', () => {
-  it('tracks the full conversation scroll container', () => {
+  it('preserves manual scroll and applies only valid bottom corrections', () => {
     expect(SUMMARY_SCROLL_SELECTOR).toBe('.vs-summary-scroll');
-  });
-  it('keeps the previous manual scroll position while streaming re-renders', () => {
     expect(resolveSummaryScrollTop(false, 240, 1000)).toBe(240);
-  });
-
-  it('sticks to the bottom only when the user was already near the bottom', () => {
     expect(resolveSummaryScrollTop(true, 240, 1000)).toBe(1000);
-  });
-
-  it('rejects stale or user-invalidated next-frame scroll corrections', () => {
     expect(shouldApplySummaryScrollCorrection(2, 1, true, true)).toBe(false);
     expect(shouldApplySummaryScrollCorrection(2, 2, false, true)).toBe(false);
     expect(shouldApplySummaryScrollCorrection(2, 2, true, false)).toBe(false);
     expect(shouldApplySummaryScrollCorrection(2, 2, true, true)).toBe(true);
   });
 
-  it('lets the summary output frame fill the remaining panel height even when empty', () => {
+  it('keeps summary layout, controls, metadata, and reasoning styles aligned', () => {
     expect(PANEL_STYLES).toContain('.vs-summary-scroll {\n  display: flex;');
     expect(PANEL_STYLES).toContain('.vs-output {\n  flex: 1 1 auto;');
-  });
-
-  it('uses the composer surface for user bubbles and removes assistant avatars', () => {
     const userRule = /\.vs-message\.user > p \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     const composerRule = /\.vs-chat-composer \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     expect(userRule).toContain('background: var(--vs-surface-highest);');
     expect(composerRule).toContain('background: var(--vs-surface-highest);');
     expect(PANEL_STYLES).not.toContain('.vs-avatar {');
-  });
-
-  it('styles reasoning separation and fixed intent shortcuts', () => {
     const thinkingRule = /\.vs-thinking \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     expect(thinkingRule).toContain('border-bottom: 1px solid var(--vs-outline-variant);');
     expect(PANEL_STYLES).toContain('.vs-intent-suggestions {');
     expect(PANEL_STYLES).toContain('.vs-intent-option {');
-  });
-
-  it('shows a custom reasoning chevron and a streaming-only four-second shimmer', () => {
     expect(PANEL_STYLES).toContain('.vs-thinking summary::-webkit-details-marker');
     expect(PANEL_STYLES).toContain('.vs-thinking-chevron');
     expect(PANEL_STYLES).toContain('.vs-thinking[open] .vs-thinking-chevron');
@@ -863,9 +833,6 @@ describe('summary scroll preservation', () => {
     expect(PANEL_STYLES).toContain('animation: vs-thinking-shimmer 4s linear infinite;');
     expect(PANEL_STYLES).toContain('@keyframes vs-thinking-shimmer');
     expect(PANEL_STYLES).toContain('50%, 100% { background-position: -120% 0; }');
-  });
-
-  it('centers assistant placeholder content and compacts configuration controls', () => {
     const assistantRule = /\.vs-message\.assistant \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     const chipRule = /\.vs-config-chip \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     const subtitleRule = /\.vs-subtitle-chip \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
@@ -873,32 +840,28 @@ describe('summary scroll preservation', () => {
     expect(chipRule).toContain('min-height: 26px;');
     expect(subtitleRule).toContain('width: auto;');
     expect(subtitleRule).toContain('max-width: min(170px, 40%);');
-  });
-
-  it('uses a three-column video description grid with a narrow two-column fallback', () => {
     const metaRule = /\.vs-video-meta \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     expect(metaRule).toContain('display: grid;');
     expect(metaRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(PANEL_STYLES).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
-  });
-
-  it('uses white chip and intent text without a visible intent heading', () => {
     const chipTextRule = /\.vs-config-chip span \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     const intentRule = /\.vs-intent-option \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
     expect(chipTextRule).toContain('color: var(--vs-text);');
     expect(PANEL_STYLES).toContain('.vs-subtitle-chip select {');
     expect(intentRule).toContain('color: var(--vs-text);');
     expect(PANEL_STYLES).not.toContain('.vs-intent-label {');
+    expect(PANEL_STYLES).toContain('--vs-rail-width: 56px;');
+    expect(PANEL_STYLES).toContain('width: var(--vs-rail-width);');
+    expect(PANEL_STYLES).toContain('width: calc(100% - var(--vs-rail-width));');
+    expect(PANEL_STYLES).toContain('.vs-rail-tab {\n  width: 40px;\n  height: 40px;');
+    expect(PANEL_STYLES).toContain('.vs-rail-tab svg {\n  width: 20px;\n  height: 20px;');
   });
 });
 
 describe('summary chat UI states', () => {
-  it('treats reasoning-only streaming output as renderable summary content', () => {
+  it('derives summary output, composer, and toolbar states', () => {
     expect(hasRenderableSummaryOutput({ content: '', reasoning: '正在分析' })).toBe(true);
     expect(hasRenderableSummaryOutput({ content: '', reasoning: '' })).toBe(false);
-  });
-
-  it('turns the empty composer into a start-summary control', () => {
     expect(summaryComposerState({ hasSummary: false, busy: false })).toEqual({
       textareaDisabled: true,
       placeholder: '请先生成总结',
@@ -911,9 +874,6 @@ describe('summary chat UI states', () => {
       action: 'send',
       label: '发送',
     });
-  });
-
-  it('shows tools only for a completed summary and fixes context above chat in the requested order', () => {
     expect(shouldShowSummaryToolbar({ hasSummary: false, streaming: false })).toBe(false);
     expect(shouldShowSummaryToolbar({ hasSummary: false, streaming: true })).toBe(false);
     expect(shouldShowSummaryToolbar({ hasSummary: true, streaming: false })).toBe(true);
@@ -934,19 +894,13 @@ describe('summary chat UI states', () => {
 });
 
 describe('asset URL normalization', () => {
-  it('upgrades insecure display assets to HTTPS', () => {
+  it('normalizes remote assets without changing safe inline URLs', () => {
     expect(normalizeAssetUrl('http://i0.hdslb.com/bfs/archive/cover.jpg')).toBe(
       'https://i0.hdslb.com/bfs/archive/cover.jpg',
     );
-  });
-
-  it('resolves protocol-relative assets as HTTPS', () => {
     expect(normalizeAssetUrl('//i0.hdslb.com/bfs/archive/cover.jpg')).toBe(
       'https://i0.hdslb.com/bfs/archive/cover.jpg',
     );
-  });
-
-  it('preserves data URLs and existing HTTPS URLs', () => {
     expect(normalizeAssetUrl('data:image/png;base64,abc')).toBe('data:image/png;base64,abc');
     expect(normalizeAssetUrl('https://example.com/image.png')).toBe('https://example.com/image.png');
   });
@@ -967,7 +921,7 @@ describe('normalizeChatCompletionsUrl', () => {
 });
 
 describe('OpenAI-compatible text config', () => {
-  it('saves an arbitrary OpenAI-compatible connection without provider defaults', () => {
+  it('normalizes arbitrary endpoints and copied credentials', () => {
     const config = applyTextConfig(DEFAULT_CONFIG.textAi, {
       apiStyle: 'openai',
       baseUrl: 'https://llm.example.com/openai/v1/chat/completions',
@@ -978,22 +932,16 @@ describe('OpenAI-compatible text config', () => {
     expect(config.apiUrl).toBe('https://llm.example.com/openai/v1');
     expect(config.apiKey).toBe('custom-key');
     expect(config.model).toBe('my-custom-model');
-  });
-
-  it('accepts raw API keys or copied Authorization header values', () => {
     expect(normalizeApiKey(' sk-test ')).toBe('sk-test');
     expect(normalizeApiKey('Bearer sk-test')).toBe('sk-test');
-  });
-
-  it('normalizes complete endpoints without changing the user-provided host', () => {
     expect(normalizeOpenAIBaseUrl('https://api.minimaxi.com/v1/chat/completions')).toBe(
       'https://api.minimaxi.com/v1',
     );
     expect(normalizeOpenAIBaseUrl('https://example.com/proxy/v1/')).toBe('https://example.com/proxy/v1');
   });
 
-  it('uses max_completion_tokens for MiniMax-M3 chat completions', () => {
-    const payload = buildChatCompletionsPayload(
+  it('selects the compatible MiniMax token field by model generation', () => {
+    const m3Payload = buildChatCompletionsPayload(
       {
         model: 'MiniMax-M3',
         messages: [{ role: 'user', content: 'Reply with OK.' }],
@@ -1003,12 +951,9 @@ describe('OpenAI-compatible text config', () => {
       DEFAULT_CONFIG.textAi,
     ) as Record<string, unknown>;
 
-    expect(payload.max_completion_tokens).toBe(128);
-    expect(payload.max_tokens).toBeUndefined();
-  });
-
-  it('keeps max_tokens for earlier MiniMax chat models', () => {
-    const payload = buildChatCompletionsPayload(
+    expect(m3Payload.max_completion_tokens).toBe(128);
+    expect(m3Payload.max_tokens).toBeUndefined();
+    const legacyPayload = buildChatCompletionsPayload(
       {
         model: 'MiniMax-M2.7',
         messages: [{ role: 'user', content: 'Reply with OK.' }],
@@ -1018,8 +963,8 @@ describe('OpenAI-compatible text config', () => {
       DEFAULT_CONFIG.textAi,
     ) as Record<string, unknown>;
 
-    expect(payload.max_tokens).toBe(8);
-    expect(payload.max_completion_tokens).toBeUndefined();
+    expect(legacyPayload.max_tokens).toBe(8);
+    expect(legacyPayload.max_completion_tokens).toBeUndefined();
   });
 
 });
@@ -1080,27 +1025,39 @@ describe('summary chat', () => {
 
 
 describe('image generation client helpers', () => {
-  it('maps OpenAI b64_json response format to MiniMax base64', () => {
+  it('normalizes requests, responses, prompts, and download URLs', () => {
     expect(normalizeImageResponseFormat('https://api.minimaxi.com/v1/image_generation', 'b64_json')).toBe('base64');
     expect(normalizeImageResponseFormat('https://api.openai.com/v1/images/generations', 'b64_json')).toBe('b64_json');
-  });
-
-  it('parses MiniMax base64 image responses', () => {
     expect(parseGeneratedImage({ data: [{ base64: 'abc' }] }).dataUrl).toBe('data:image/png;base64,abc');
     expect(parseGeneratedImage({ data: { image_base64: ['def'] } }).dataUrl).toBe('data:image/png;base64,def');
     expect(parseGeneratedImage({ data: { image_base64: 'ghi' } }).dataUrl).toBe('data:image/png;base64,ghi');
     expect(parseGeneratedImage({ image_base64: ['jkl'] }).dataUrl).toBe('data:image/png;base64,jkl');
-  });
-
-  it('keeps image prompts under the provider-safe limit', () => {
     expect(sanitizeImagePrompt('a'.repeat(1600)).length).toBe(1200);
-  });
-
-  it('prefers embedded image data when downloading generated images', () => {
     expect(generatedImageHref({ dataUrl: 'data:image/png;base64,abc', url: 'https://example.com/image.png' })).toBe(
       'data:image/png;base64,abc',
     );
     expect(generatedImageHref({ url: 'https://example.com/image.png' })).toBe('https://example.com/image.png');
+  });
+});
+
+describe('image preview controls', () => {
+  it('keeps the complete action set and bounded transform state', () => {
+    expect(IMAGE_PREVIEW_ACTIONS).toEqual([
+      'zoomOut',
+      'zoomIn',
+      'rotateLeft',
+      'rotateRight',
+      'reset',
+      'download',
+    ]);
+    expect(IMAGE_PREVIEW_SCALES).toContain(1);
+    expect(nextImagePreviewScale(1, 'in')).toBe(1.1);
+    expect(nextImagePreviewScale(1, 'out')).toBe(0.9);
+    expect(nextImagePreviewScale(5, 'in')).toBe(5);
+    expect(nextImagePreviewScale(0.25, 'out')).toBe(0.25);
+    expect(imagePreviewTransform({ scale: 1.5, rotation: 90, x: 12, y: -8 })).toBe(
+      'translate(12px, -8px) rotate(90deg) scale(1.5)',
+    );
   });
 });
 
@@ -1362,11 +1319,8 @@ describe('AppController cache management and clipboard', () => {
 });
 
 describe('ui i18n', () => {
-  it('starts from the floating mascot launcher instead of an expanded panel', () => {
+  it('starts collapsed even when legacy config saved an expanded panel', () => {
     expect(DEFAULT_CONFIG.ui.collapsed).toBe(true);
-  });
-
-  it('does not restore an expanded panel from saved configuration on startup', () => {
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: {
@@ -1399,19 +1353,15 @@ describe('ui i18n', () => {
     expect(config.oneImage).toBeUndefined();
   });
 
-  it('returns Chinese by default and English when requested', () => {
+  it('selects localized UI and status text with Chinese fallback', () => {
     expect(getUiText('zh-CN', 'appName')).toBe('片语');
     expect(getUiText('en-US', 'appName')).toBe('Video Lens');
     expect(getUiText('zh-CN', 'tabs.summary')).toBe('摘要');
     expect(getUiText('en-US', 'tabs.summary')).toBe('Summary');
+    expect(getUiText('zh-CN', 'summary.pageTitle')).toBe('片语-AI总结');
+    expect(getUiText('en-US', 'summary.pageTitle')).toBe('Video Lens - AI Summary');
     expect(getUiText('en-US', 'summary.emptyTitle')).toBe('No summary yet');
-  });
-
-  it('falls back to Chinese for unknown language values', () => {
     expect(getUiText('fr-FR', 'actions.saveSettings')).toBe('保存设置');
-  });
-
-  it('translates known status messages and preserves unknown details', () => {
     expect(getStatusText('en-US', '生成摘要')).toBe('Generating summary');
     expect(getStatusText('en-US', 'MarkDown 已导出')).toBe('MarkDown exported');
     expect(getStatusText('en-US', '网络请求失败')).toBe('网络请求失败');
@@ -1419,16 +1369,10 @@ describe('ui i18n', () => {
 });
 
 describe('panel resizing', () => {
-  it('keeps panel width in config without exposing a settings dropdown', () => {
+  it('clamps and persists panel width without a settings toast', () => {
     expect(DEFAULT_CONFIG.ui.panelWidth).toBe(420);
-  });
-
-  it('uses wider resize bounds for all tabs', () => {
     expect(clampPanelWidth(260)).toBe(300);
     expect(clampPanelWidth(960)).toBe(900);
-  });
-
-  it('can persist resize changes without showing a settings-saved toast', () => {
     const data = new Map<string, string>();
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
@@ -1467,20 +1411,20 @@ describe('route watcher wrappers', () => {
 });
 
 describe('summary transcript language label', () => {
-  it('makes selected subtitle language visible in the summary view', () => {
+  it('formats and selects visible subtitle labels', () => {
     expect(formatTranscriptLanguage({ language: '中文（自动生成）' })).toBe(
       '字幕：中文（自动生成）',
     );
     expect(formatTranscriptLanguage(undefined)).toBe('字幕：未读取');
-  });
-
-  it('shows the newly selected subtitle option before regeneration', () => {
     const options = [
       { id: 'zh', label: '中文', languageCode: 'zh' },
       { id: 'en', label: 'English', languageCode: 'en' },
     ];
     expect(selectedSubtitleLabel(options, 'en', { language: '中文' })).toBe('English');
     expect(selectedSubtitleLabel(options, 'missing', { language: '中文' })).toBe('中文');
+    expect(shouldRenderSubtitleSelect(0)).toBe(false);
+    expect(shouldRenderSubtitleSelect(1)).toBe(true);
+    expect(shouldRenderSubtitleSelect(2)).toBe(true);
   });
 
   it('clears the previous subtitle selection when summary language changes', () => {
@@ -1509,14 +1453,20 @@ describe('summary transcript language label', () => {
 });
 
 describe('video statistics presentation', () => {
-  it('formats compact counts for Chinese and English interfaces', () => {
+  it('formats counts and uses readable line icons', () => {
+    const followers = videoMetadataIconSpec('followers');
+    const coin = videoMetadataIconSpec('coin');
+    expect(followers).toMatchObject({ viewBox: '0 0 24 24', filled: false });
+    expect(coin).toMatchObject({ viewBox: '0 0 24 24', filled: false });
+    expect(followers.paths).toHaveLength(4);
+    expect(coin.paths).toHaveLength(6);
     expect(formatCompactCount(9_876, 'zh-CN')).toBe('9876');
     expect(formatCompactCount(12_300, 'zh-CN')).toBe('1.2万');
     expect(formatCompactCount(123_000_000, 'zh-CN')).toBe('1.2亿');
     expect(formatCompactCount(12_300, 'en-US')).toBe('12.3K');
   });
 
-  it('orders available stats and omits invalid values', () => {
+  it('orders available metadata and omits invalid statistics', () => {
     expect(videoStatItems({
       favorites: 600,
       views: 100,
@@ -1531,9 +1481,6 @@ describe('video statistics presentation', () => {
       'coins',
       'favorites',
     ]);
-  });
-
-  it('orders creator, followers, upload time, and engagement in a 3x3 grid', () => {
     const items = videoMetadataItems({
       source: 'bilibili',
       sourceId: 'BV-meta',
@@ -1665,19 +1612,13 @@ describe('sensitive config storage', () => {
 });
 
 describe('settings secret fields', () => {
-  it('does not expose saved API keys as input values', () => {
+  it('hides, preserves, replaces, and labels saved API credentials', () => {
     expect(resolveSecretInput('saved-secret')).toEqual({
       value: '',
       placeholder: '已保存；留空则继续使用',
     });
-  });
-
-  it('preserves saved API keys when the input is left blank', () => {
     expect(resolveSecretValueForSave('saved-secret', '')).toBe('saved-secret');
     expect(resolveSecretValueForSave('saved-secret', ' Bearer new-secret ')).toBe('new-secret');
-  });
-
-  it('uses one explicit label for real API connectivity tests', () => {
     expect(CONNECTION_TEST_LABEL).toBe('连通性测试');
   });
 });
@@ -1694,46 +1635,35 @@ describe('toast notifications', () => {
 
 describe('panel navigation icons', () => {
   it('uses inline svg paths for navigation and collapse controls', () => {
-    expect(panelIconPaths('summary')).toHaveLength(5);
+    expect(panelIconPaths('summary')).toHaveLength(3);
+    expect(panelIconPaths('summary')[0]).toContain('L16.5 7.5');
     expect(panelIconPaths('settings')).toHaveLength(2);
     expect(panelIconPaths('collapse')).toHaveLength(2);
   });
 });
 
 describe('panel fullscreen visibility', () => {
-  it('detects standard fullscreen elements', () => {
+  it('detects standard and WebKit fullscreen state', () => {
     expect(isDocumentFullscreen({ fullscreenElement: {} as Element })).toBe(true);
-  });
-
-  it('detects WebKit fullscreen elements', () => {
     expect(isDocumentFullscreen({ webkitFullscreenElement: {} as Element })).toBe(true);
-  });
-
-  it('keeps the panel visible outside fullscreen mode', () => {
     expect(isDocumentFullscreen({ fullscreenElement: null, webkitFullscreenElement: null })).toBe(false);
   });
 });
 
 describe('panel settings navigation guard', () => {
-  it('leaves non-dirty settings tabs without prompting', () => {
+  it('handles clean, confirmed, and cancelled settings navigation', () => {
     let prompts = 0;
     expect(shouldLeaveSettingsTab(false, () => {
       prompts += 1;
       return true;
     })).toBe(true);
     expect(prompts).toBe(0);
-  });
-
-  it('saves dirty settings before leaving when the user confirms', () => {
     let saved = 0;
     expect(shouldLeaveSettingsTab(true, () => true, () => {
       saved += 1;
       return true;
     })).toBe(true);
     expect(saved).toBe(1);
-  });
-
-  it('stays on settings when the user cancels the unsaved changes prompt', () => {
     expect(shouldLeaveSettingsTab(true, () => false, () => true)).toBe(false);
   });
 });
@@ -1745,11 +1675,11 @@ describe('summary markdown export', () => {
     bvid: 'BV-export',
     cid: 1,
     title: '测试/视频:标题',
-    upName: 'Karl',
+    upName: 'Demo Creator',
     url: 'https://www.bilibili.com/video/BV-export',
   };
 
-  it('builds a markdown document with video metadata and summary content', () => {
+  it('builds markdown content and a safe filename', () => {
     const markdown = buildSummaryMarkdown({
       video,
       transcript: { plainText: '字幕', lines: [], charCount: 2 },
@@ -1759,13 +1689,10 @@ describe('summary markdown export', () => {
     });
 
     expect(markdown).toContain('# 测试/视频:标题');
-    expect(markdown).toContain('- Creator: Karl');
+    expect(markdown).toContain('- Creator: Demo Creator');
     expect(markdown).toContain('- Platform: bilibili');
     expect(markdown).toContain('- 原链接: https://www.bilibili.com/video/BV-export');
     expect(markdown).toContain('# 结论\n\n核心内容');
-  });
-
-  it('uses a safe filename for exported markdown', () => {
     expect(summaryMarkdownFileName(video.title)).toBe('测试_视频_标题.md');
   });
 });

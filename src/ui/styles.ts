@@ -18,6 +18,7 @@ export const PANEL_STYLES = `
   --vs-primary-strong: #7c3aed;
   --vs-tertiary: #34d399;
   --vs-danger: #ef4444;
+  --vs-rail-width: 56px;
   --vs-shadow: 0 24px 72px rgba(0, 0, 0, .48);
   color: var(--vs-text);
   font-family: Geist, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -219,7 +220,7 @@ button.icon svg {
   bottom: 0;
   z-index: 2147483000;
   display: flex;
-  width: min(calc(var(--vs-width, 420px) + 72px), calc(100vw - 16px));
+  width: min(calc(var(--vs-width, 420px) + var(--vs-rail-width)), calc(100vw - 16px));
   max-height: 100vh;
   overflow: hidden;
   color: var(--vs-text);
@@ -227,11 +228,11 @@ button.icon svg {
 }
 
 .vs-shell.wide {
-  width: min(calc(var(--vs-width, 420px) + 72px), calc(100vw - 16px));
+  width: min(calc(var(--vs-width, 420px) + var(--vs-rail-width)), calc(100vw - 16px));
 }
 
 .vs-shell.summary {
-  width: min(calc(var(--vs-width, 420px) + 122px), calc(100vw - 16px));
+  width: min(calc(var(--vs-width, 420px) + var(--vs-rail-width) + 50px), calc(100vw - 16px));
 }
 
 .vs-shell.right { right: 0; }
@@ -273,7 +274,7 @@ button.icon svg {
 
 .vs-panel {
   position: relative;
-  width: calc(100% - 72px);
+  width: calc(100% - var(--vs-rail-width));
   min-width: 0;
   height: 100%;
   display: grid;
@@ -303,11 +304,11 @@ button.icon svg {
 }
 
 .vs-toast.right {
-  right: 88px;
+  right: calc(var(--vs-rail-width) + 16px);
 }
 
 .vs-toast.left {
-  left: 88px;
+  left: calc(var(--vs-rail-width) + 16px);
 }
 
 .vs-toast span {
@@ -419,51 +420,51 @@ button.icon svg {
 }
 
 .vs-rail {
-  width: 72px;
+  width: var(--vs-rail-width);
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 18px 10px;
+  gap: 10px;
+  padding: 14px 6px;
   border-left: 1px solid var(--vs-outline-variant);
   background: var(--vs-surface);
 }
 
 .vs-rail-mascot {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   padding: 5px;
   border: 1px solid rgba(52, 211, 153, .32);
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(52, 211, 153, .08);
   filter: drop-shadow(0 0 8px rgba(52, 211, 153, .24));
 }
 
 .vs-rail-line {
-  width: 34px;
+  width: 28px;
   height: 1px;
   background: var(--vs-outline-variant);
   margin: 2px 0 6px;
 }
 
 .vs-rail-tab {
-  width: 50px;
-  height: 50px;
-  min-height: 50px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--vs-muted);
 }
 
 .vs-rail-tab svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: block;
   fill: none;
   stroke: currentColor;
@@ -473,7 +474,7 @@ button.icon svg {
 }
 
 .vs-rail-tab .material-symbols-outlined {
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .vs-rail-tab em {
@@ -740,6 +741,7 @@ textarea::-webkit-scrollbar-thumb,
   align-items: center;
   gap: 5px;
   overflow: hidden;
+  cursor: default;
 }
 
 .vs-video-meta-item svg,
@@ -1033,8 +1035,10 @@ textarea::-webkit-scrollbar-thumb,
 .vs-output-tool::after {
   content: attr(data-tooltip);
   position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
+  top: calc(100% + 2px);
+  left: calc(50% + 2px);
+  bottom: auto;
+  right: auto;
   z-index: 8;
   max-width: 180px;
   padding: 6px 8px;
@@ -1632,12 +1636,164 @@ textarea::-webkit-scrollbar-thumb,
   margin-top: 8px;
 }
 
-.vs-chat-image img {
+.vs-chat-image-trigger {
+  display: block;
+  max-width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: zoom-in;
+}
+
+.vs-chat-image-trigger:hover:not(:disabled),
+.vs-chat-image-trigger:focus-visible:not(:disabled) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.vs-chat-image-trigger img {
   display: block;
   max-width: 100%;
   max-height: 360px;
   border-radius: 8px;
   object-fit: contain;
+}
+
+.vs-image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: block;
+  overflow: hidden;
+  background: rgba(3, 3, 7, .92);
+  backdrop-filter: blur(8px);
+  outline: none;
+}
+
+.vs-image-preview-overlay[hidden] {
+  display: none !important;
+}
+
+.vs-image-preview-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.vs-image-preview-image {
+  display: block;
+  max-width: min(90vw, 1600px);
+  max-height: calc(100vh - 140px);
+  object-fit: contain;
+  user-select: none;
+  touch-action: none;
+  cursor: grab;
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+
+.vs-image-preview-image.dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.vs-image-preview-action {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: #e4e4e7;
+}
+
+.vs-image-preview-action:hover:not(:disabled),
+.vs-image-preview-action:focus-visible:not(:disabled) {
+  border: 0;
+  background: rgba(124, 58, 237, .3);
+  box-shadow: none;
+  color: #fff;
+}
+
+.vs-image-preview-action svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vs-image-preview-overlay > .vs-image-preview-action {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+  background: rgba(32, 32, 40, .78);
+}
+
+.vs-image-preview-toolbar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 10px;
+  background: rgba(28, 28, 34, .9);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .44);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+}
+
+.vs-image-preview-scale {
+  min-width: 48px;
+  color: #d4d4d8;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+}
+
+.vs-image-preview-divider {
+  width: 1px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin: 0 3px;
+  background: rgba(255, 255, 255, .12);
+}
+
+@media (max-width: 420px) {
+  .vs-image-preview-toolbar {
+    bottom: 16px;
+    gap: 2px;
+    padding: 4px;
+  }
+
+  .vs-image-preview-action {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .vs-image-preview-scale {
+    min-width: 42px;
+  }
 }
 
 textarea,
