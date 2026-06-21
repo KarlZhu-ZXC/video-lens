@@ -167,6 +167,13 @@ describe('ChatGPT image bridge configuration', () => {
 });
 
 describe('ChatGPT image bridge protocol', () => {
+  it('uses the Video Lens storage namespace', () => {
+    expect(CHATGPT_IMAGE_JOB_KEY).toMatch(/^video_lens_/);
+    expect(CHATGPT_IMAGE_RESULT_KEY).toMatch(/^video_lens_/);
+    expect(CHATGPT_IMAGE_ACK_KEY).toMatch(/^video_lens_/);
+    expect(CHATGPT_IMAGE_HEARTBEAT_KEY).toMatch(/^video_lens_/);
+  });
+
   it('canonicalizes only a ChatGPT Project root URL', () => {
     expect(normalizeChatGptProjectUrl('https://chatgpt.com/g/g-p-abc123/project/?model=auto#top')).toBe(
       'https://chatgpt.com/g/g-p-abc123/project',

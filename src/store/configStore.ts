@@ -1,5 +1,5 @@
 import { safeJsonParse } from '../utils/json';
-import { CONFIG_KEY, type LocalConfig } from './types';
+import { CONFIG_KEY, LEGACY_CONFIG_KEY, type LocalConfig } from './types';
 
 export const DEFAULT_CONFIG: LocalConfig = {
   schemaVersion: 1,
@@ -49,10 +49,16 @@ export const DEFAULT_CONFIG: LocalConfig = {
 };
 
 export function loadConfig(): LocalConfig {
-  const raw = typeof GM_getValue === 'function' ? GM_getValue(CONFIG_KEY, '') : localStorage.getItem(CONFIG_KEY);
+  const usesGmStorage = typeof GM_getValue === 'function';
+  let raw = usesGmStorage ? GM_getValue(CONFIG_KEY, '') : localStorage.getItem(CONFIG_KEY);
+  let migrated = false;
+  if (!raw) {
+    raw = usesGmStorage ? GM_getValue(LEGACY_CONFIG_KEY, '') : localStorage.getItem(LEGACY_CONFIG_KEY);
+    migrated = Boolean(raw);
+  }
   const parsed = safeJsonParse(String(raw || ''), DEFAULT_CONFIG);
-  const config = mergeConfig(DEFAULT_CONFIG, typeof GM_getValue === 'function' ? parsed : stripSensitiveConfigForStorage(parsed));
-  return {
+  const config = mergeConfig(DEFAULT_CONFIG, usesGmStorage ? parsed : stripSensitiveConfigForStorage(parsed));
+  const normalized = {
     ...config,
     source: {
       ...config.source,
@@ -67,6 +73,12 @@ export function loadConfig(): LocalConfig {
     imageAi: pickImageAi(config.imageAi),
     ui: { ...config.ui, collapsed: true },
   };
+  if (migrated) {
+    const value = JSON.stringify(usesGmStorage ? normalized : stripSensitiveConfigForStorage(normalized));
+    if (usesGmStorage && typeof GM_setValue === 'function') GM_setValue(CONFIG_KEY, value);
+    else if (!usesGmStorage) localStorage.setItem(CONFIG_KEY, value);
+  }
+  return normalized;
 }
 
 export function saveConfig(config: LocalConfig): void {

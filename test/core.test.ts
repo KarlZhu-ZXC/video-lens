@@ -24,7 +24,13 @@ import {
   saveConfig,
   stripSensitiveConfigForStorage,
 } from '../src/store/configStore';
-import { CONFIG_KEY } from '../src/store/types';
+import {
+  CONFIG_KEY,
+  LEGACY_CONFIG_KEY,
+  LEGACY_SUMMARY_CACHE_KEY,
+  SUMMARY_CACHE_KEY,
+} from '../src/store/types';
+import { makeJsonCache } from '../src/store/makeJsonCache';
 import { summaryCache } from '../src/store/summaryCache';
 import { estimateSummaryMaxTokens, runSummaryPipeline } from '../src/summary/summaryPipeline';
 import { askSummaryChat, buildOneImagePrompt, isImageGenerationRequest } from '../src/summary/chatPipeline';
@@ -1559,6 +1565,66 @@ describe('video statistics presentation', () => {
 });
 
 describe('sensitive config storage', () => {
+  it('migrates legacy config to the new key without exposing localStorage secrets', () => {
+    const data = new Map<string, string>();
+    data.set(LEGACY_CONFIG_KEY, JSON.stringify({
+      ...DEFAULT_CONFIG,
+      textAi: { ...DEFAULT_CONFIG.textAi, model: 'legacy-model', apiKey: 'legacy-secret' },
+    }));
+    Object.defineProperty(globalThis, 'GM_getValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'GM_setValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+
+    expect(loadConfig().textAi.model).toBe('legacy-model');
+    expect(data.get(CONFIG_KEY)).toBeTruthy();
+    expect(data.get(CONFIG_KEY)).not.toContain('legacy-secret');
+    expect(data.get(LEGACY_CONFIG_KEY)).toContain('legacy-secret');
+  });
+
+  it('prefers new configuration over legacy configuration', () => {
+    const data = new Map<string, string>([
+      [CONFIG_KEY, JSON.stringify({ ...DEFAULT_CONFIG, textAi: { ...DEFAULT_CONFIG.textAi, model: 'new-model' } })],
+      [LEGACY_CONFIG_KEY, JSON.stringify({ ...DEFAULT_CONFIG, textAi: { ...DEFAULT_CONFIG.textAi, model: 'old-model' } })],
+    ]);
+    Object.defineProperty(globalThis, 'GM_getValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+
+    expect(loadConfig().textAi.model).toBe('new-model');
+  });
+
+  it('migrates legacy JSON caches without deleting the old cache', () => {
+    const data = new Map<string, string>();
+    data.set(LEGACY_SUMMARY_CACHE_KEY, JSON.stringify({
+      key: { updatedAt: 1, value: { content: 'legacy summary' } },
+    }));
+    Object.defineProperty(globalThis, 'GM_getValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'GM_setValue', { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      },
+    });
+    const cache = makeJsonCache<{ content: string }>(SUMMARY_CACHE_KEY, LEGACY_SUMMARY_CACHE_KEY);
+
+    expect(cache.get('key')).toEqual({ content: 'legacy summary' });
+    expect(data.get(SUMMARY_CACHE_KEY)).toBe(data.get(LEGACY_SUMMARY_CACHE_KEY));
+    expect(data.has(LEGACY_SUMMARY_CACHE_KEY)).toBe(true);
+  });
+
   it('strips API keys before falling back to page localStorage', () => {
     const config = {
       ...DEFAULT_CONFIG,

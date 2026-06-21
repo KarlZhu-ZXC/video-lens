@@ -1,9 +1,17 @@
 import { safeJsonParse } from '../utils/json';
 import type { CacheEnvelope } from './types';
 
-export function makeJsonCache<T>(storageKey: string) {
+export function makeJsonCache<T>(storageKey: string, legacyStorageKey?: string) {
   function loadAll(): Record<string, CacheEnvelope<T>> {
-    const raw = typeof GM_getValue === 'function' ? GM_getValue(storageKey, '') : localStorage.getItem(storageKey);
+    const usesGmStorage = typeof GM_getValue === 'function';
+    let raw = usesGmStorage ? GM_getValue(storageKey, '') : localStorage.getItem(storageKey);
+    if (!raw && legacyStorageKey) {
+      raw = usesGmStorage ? GM_getValue(legacyStorageKey, '') : localStorage.getItem(legacyStorageKey);
+      if (raw) {
+        if (usesGmStorage && typeof GM_setValue === 'function') GM_setValue(storageKey, String(raw));
+        else if (!usesGmStorage) localStorage.setItem(storageKey, String(raw));
+      }
+    }
     return safeJsonParse<Record<string, CacheEnvelope<T>>>(String(raw || ''), {});
   }
 

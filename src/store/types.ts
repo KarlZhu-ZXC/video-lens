@@ -1,8 +1,11 @@
 import type { PromptPreset } from '../prompts/promptTypes';
 
-export const CONFIG_KEY = 'video_summary_config_v1';
-export const SUMMARY_CACHE_KEY = 'video_summary_summary_cache_v1';
-export const IMAGE_CACHE_KEY = 'video_summary_image_cache_v1';
+export const CONFIG_KEY = 'video_lens_config_v1';
+export const SUMMARY_CACHE_KEY = 'video_lens_summary_cache_v1';
+export const IMAGE_CACHE_KEY = 'video_lens_image_cache_v1';
+export const LEGACY_CONFIG_KEY = 'video_summary_config_v1';
+export const LEGACY_SUMMARY_CACHE_KEY = 'video_summary_summary_cache_v1';
+export const LEGACY_IMAGE_CACHE_KEY = 'video_summary_image_cache_v1';
 
 export interface LocalConfig {
   schemaVersion: 1;
