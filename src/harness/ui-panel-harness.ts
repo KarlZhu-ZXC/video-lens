@@ -53,6 +53,12 @@ const controller = {
     controller.config = { ...controller.config, ui: { ...controller.config.ui, collapsed: !controller.config.ui.collapsed } };
     panel.render();
   },
+  async openFromLauncher() {
+    if (!controller.config.ui.collapsed) return;
+    controller.config = { ...controller.config, ui: { ...controller.config.ui, collapsed: false } };
+    panel.render();
+    if (!controller.state.summary) await controller.generateSummary();
+  },
   async generateSummary() {
     controller.state = {
       ...controller.state,
@@ -173,6 +179,23 @@ if (scenario === 'settings-chatgpt') {
       ...controller.config.imageAi,
       mode: 'chatgpt_web',
       chatgptConversationUrl: 'https://chatgpt.com/g/g-p-video-lens/project',
+    },
+    ui: { ...controller.config.ui, collapsed: false, defaultTab: 'settings' },
+  };
+}
+
+if (scenario === 'settings-custom') {
+  controller.config = {
+    ...controller.config,
+    summary: { ...controller.config.summary, defaultPromptId: 'summary_custom' },
+    prompts: {
+      customPresets: [{
+        id: 'summary_custom',
+        name: 'Custom',
+        type: 'summary',
+        template: 'Summarize with this custom structure:\n\n{{transcript}}',
+        builtIn: false,
+      }],
     },
     ui: { ...controller.config.ui, collapsed: false, defaultTab: 'settings' },
   };

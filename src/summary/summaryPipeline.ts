@@ -1,6 +1,11 @@
 import { chunkText } from '../ai/chunking';
 import type { TextAiClient } from '../ai/text/TextAiClient';
-import { getPromptById, getPromptTemplate } from '../prompts/defaultPrompts';
+import {
+  formatTranscriptWithTimeline,
+  getPromptById,
+  getPromptTemplate,
+  resolveSummaryPrompt,
+} from '../prompts/defaultPrompts.v2';
 import { renderPrompt } from '../prompts/renderPrompt';
 import type { LocalConfig } from '../store/types';
 import type { Transcript, VideoInfo } from '../sources/VideoSourceProvider';
@@ -19,10 +24,16 @@ export interface SummaryPipelineInput {
 
 export async function runSummaryPipeline(input: SummaryPipelineInput): Promise<SummaryResult> {
   const { video, transcript, textAiClient, config, onProgress, signal } = input;
-  const summaryPrompt = getPromptById(config.summary.defaultPromptId, config.prompts.customPresets);
-  if (!summaryPrompt) throw new Error(`找不到摘要 Prompt：${config.summary.defaultPromptId}`);
+  const summaryPrompt = resolveSummaryPrompt(
+    config.summary.defaultPromptId,
+    config.prompts.customPresets,
+    config.summary.language,
+  );
+  const transcriptText = summaryPrompt.preset.id === 'summary_timeline'
+    ? formatTranscriptWithTimeline(transcript) || transcript.plainText
+    : transcript.plainText;
 
-  const chunks = chunkText(transcript.plainText, {
+  const chunks = chunkText(transcriptText, {
     targetChars: config.summary.chunkTargetChars,
     overlapChars: config.summary.chunkOverlapChars,
     maxChunks: config.summary.maxChunks,
@@ -32,10 +43,10 @@ export async function runSummaryPipeline(input: SummaryPipelineInput): Promise<S
     onProgress?.('生成摘要');
     let rawContent = '';
     let nativeReasoning = '';
-    const result = await ask(textAiClient, config, getPromptTemplate(summaryPrompt, config.summary.language), {
+    const result = await ask(textAiClient, config, summaryPrompt.template, {
       video,
-      transcriptText: transcript.plainText,
-      tokenSourceChars: transcript.plainText.length,
+      transcriptText,
+      tokenSourceChars: transcriptText.length,
       signal,
       onDelta: (delta) => {
         if (delta.content) rawContent += delta.content;
@@ -45,7 +56,15 @@ export async function runSummaryPipeline(input: SummaryPipelineInput): Promise<S
         input.onDelta?.({ content: extracted.content, reasoning: combinedReasoning || undefined });
       },
     });
-    return { video, transcript, promptId: summaryPrompt.id, content: result.content, reasoning: result.reasoning, createdAt: Date.now() };
+    return {
+      video,
+      transcript,
+      promptId: summaryPrompt.preset.id,
+      promptFingerprint: summaryPrompt.fingerprint,
+      content: result.content,
+      reasoning: result.reasoning,
+      createdAt: Date.now(),
+    };
   }
 
   const chunkPrompt = getPromptById('chunk_summary')!;
@@ -96,6 +115,15 @@ export async function runSummaryPipeline(input: SummaryPipelineInput): Promise<S
 
   onProgress?.('合并长视频摘要');
   const chunkSummaryPreview = chunkSummaries.join('\n\n---\n\n');
+  const targetPrompt = renderPrompt(summaryPrompt.template, {
+    title: video.title,
+    creatorName: video.creatorName ?? video.upName,
+    upName: video.upName ?? video.creatorName,
+    platform: video.platform ?? video.source,
+    description: video.description,
+    url: video.url,
+    transcript: chunkSummaryPreview,
+  });
   let result: { content: string; reasoning?: string } | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     if (attempt > 0) {
@@ -107,9 +135,10 @@ export async function runSummaryPipeline(input: SummaryPipelineInput): Promise<S
     let nativeReasoning = '';
     result = await ask(textAiClient, config, getPromptTemplate(mergePrompt, config.summary.language), {
       video,
-      transcriptText: transcript.plainText,
+      transcriptText,
       chunkSummaries: chunkSummaryPreview,
       tokenSourceChars: chunkSummaryPreview.length,
+      targetPrompt,
       signal,
       onDelta: (delta) => {
         if (delta.content) rawContent += delta.content;
@@ -124,7 +153,16 @@ export async function runSummaryPipeline(input: SummaryPipelineInput): Promise<S
   if (!result || isIncompleteMerge(result.content, chunkSummaries)) {
     throw new Error('整体摘要合并不完整，请重试');
   }
-  return { video, transcript, promptId: summaryPrompt.id, content: result.content, reasoning: result.reasoning, chunkSummaries, createdAt: Date.now() };
+  return {
+    video,
+    transcript,
+    promptId: summaryPrompt.preset.id,
+    promptFingerprint: summaryPrompt.fingerprint,
+    content: result.content,
+    reasoning: result.reasoning,
+    chunkSummaries,
+    createdAt: Date.now(),
+  };
 }
 
 function isIncompleteMerge(mergedContent: string, chunkSummaries: string[]): boolean {
@@ -151,6 +189,7 @@ async function ask(
     chunkIndex?: number;
     totalChunks?: number;
     chunkSummaries?: string;
+    targetPrompt?: string;
     tokenSourceChars?: number;
     stream?: boolean;
     onDelta?: (delta: { content: string; reasoning?: string }) => void;
@@ -169,6 +208,7 @@ async function ask(
     chunkIndex: params.chunkIndex,
     totalChunks: params.totalChunks,
     chunkSummaries: params.chunkSummaries,
+    targetPrompt: params.targetPrompt,
   });
   const result = await client.complete(
     {

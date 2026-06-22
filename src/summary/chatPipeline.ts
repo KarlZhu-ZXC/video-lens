@@ -1,15 +1,16 @@
 import type { TextAiClient } from '../ai/text/TextAiClient';
-import { getPromptById, getPromptTemplate } from '../prompts/defaultPrompts';
+import {
+  getPromptById,
+  getPromptTemplate,
+  ONE_IMAGE_PROMPT_TEMPLATE,
+} from '../prompts/defaultPrompts.v2';
 import { renderPrompt } from '../prompts/renderPrompt';
 import type { LocalConfig } from '../store/types';
 import { extractThinkBlocks } from './think';
 import type { SummaryResult, ChatMessage } from './types';
 
-export const ONE_IMAGE_PROMPT_TEMPLATE =
-  '根据以下视频内容总结，生成一张信息可视化的精美配图，风格清晰美观，适合作为视频总结的封面图：\n\n{summary}';
-
 export function buildOneImagePrompt(summary: string): string {
-  return ONE_IMAGE_PROMPT_TEMPLATE.replace('{summary}', summary.trim());
+  return renderPrompt(ONE_IMAGE_PROMPT_TEMPLATE, { summary: summary.trim() });
 }
 
 export async function askSummaryChat(

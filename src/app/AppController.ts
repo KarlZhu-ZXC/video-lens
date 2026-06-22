@@ -10,12 +10,18 @@ import { loadConfig, saveConfig } from '../store/configStore';
 import { imageCache } from '../store/imageCache';
 import { summaryCache } from '../store/summaryCache';
 import type { LocalConfig } from '../store/types';
-import { askSummaryChat, buildOneImagePrompt, isImageGenerationRequest, ONE_IMAGE_PROMPT_TEMPLATE } from '../summary/chatPipeline';
+import { askSummaryChat, buildOneImagePrompt, isImageGenerationRequest } from '../summary/chatPipeline';
 import { runSummaryPipeline } from '../summary/summaryPipeline';
 import { finalizeReasoningTiming, updateReasoningTiming } from '../summary/reasoningTiming';
 import type { SummaryResult } from '../summary/types';
 import { getErrorMessage } from '../utils/errors';
 import { stableHash } from '../utils/hash';
+import {
+  IMAGE_CONNECTIVITY_TEST_PROMPT,
+  ONE_IMAGE_PROMPT_TEMPLATE,
+  resolveSummaryPrompt,
+  TEXT_CONNECTIVITY_TEST_PROMPT,
+} from '../prompts/defaultPrompts.v2';
 import { logger } from '../utils/logger';
 import { sleep } from '../utils/sleep';
 import { createInitialState, type AppState } from './AppState';
@@ -47,12 +53,14 @@ export class AppController {
       const video = await this.readFreshVideoInfo(provider, previousVideo);
       const subtitleOptions = provider.getSubtitleOptions ? await provider.getSubtitleOptions(video) : [];
       const selectedSubtitleId = preferredSubtitleId(subtitleOptions, this.config.summary.language);
+      const promptFingerprint = this.summaryPromptFingerprint();
 
       const cached = summaryCache.find(
         (summary) =>
           summary.video.source === video.source &&
           summary.video.sourceId === video.sourceId &&
           summary.promptId === this.config.summary.defaultPromptId &&
+          summary.promptFingerprint === promptFingerprint &&
           summary.transcript.languageCode === selectedSubtitleId,
       );
       this.state = {
@@ -260,7 +268,10 @@ export class AppController {
     this.config = { ...this.config, ...patch };
     saveConfig(this.config);
     if (patch.summary?.language && patch.summary.language !== previousSummaryLanguage) {
-      this.state.selectedSubtitleId = undefined;
+      this.state.selectedSubtitleId = preferredSubtitleId(
+        this.state.subtitleOptions,
+        patch.summary.language,
+      );
       this.state.transcript = undefined;
     }
     if (options.showStatus ?? true) this.setStatus('设置已保存');
@@ -283,7 +294,7 @@ export class AppController {
     await this.runTask('测试文本模型连通性', async () => {
       await createTextAiClient({ ...this.config.textAi, requestMode: 'auto' }).complete({
         model: this.config.textAi.model,
-        messages: [{ role: 'user', content: 'Reply with OK.' }],
+        messages: [{ role: 'user', content: TEXT_CONNECTIVITY_TEST_PROMPT }],
         temperature: 0,
         maxTokens: 8,
         stream: false,
@@ -323,7 +334,7 @@ export class AppController {
     await this.runTask('测试生图模型连通性', async () => {
       await createImageAiClient({ ...this.config.imageAi, requestMode: 'auto' }).generateImage({
         model: this.config.imageAi.model,
-        prompt: 'Connectivity test image. Simple neutral abstract background, no text, no logo.',
+        prompt: IMAGE_CONNECTIVITY_TEST_PROMPT,
         size: this.config.imageAi.size,
         quality: this.config.imageAi.quality,
         responseFormat: this.config.imageAi.responseFormat,
@@ -390,7 +401,8 @@ export class AppController {
         (summary) =>
           summary.video.source === video.source &&
           summary.video.sourceId === video.sourceId &&
-          summary.promptId === this.config.summary.defaultPromptId,
+          summary.promptId === this.config.summary.defaultPromptId &&
+          summary.promptFingerprint === this.summaryPromptFingerprint(),
       );
     if (!cached) return false;
     this.state.video = video;
@@ -457,8 +469,16 @@ export class AppController {
         ? { source: this.state.video?.source ?? 'bilibili', sourceId: videoOrSourceId }
         : videoOrSourceId;
     return stableHash(
-      `${video.source}:${video.sourceId}:${this.config.summary.defaultPromptId}:${this.config.textAi.model}:${this.config.summary.language}:${subtitleId ?? ''}`,
+      `${video.source}:${video.sourceId}:${this.config.summary.defaultPromptId}:${this.summaryPromptFingerprint()}:${this.config.textAi.model}:${this.config.summary.language}:${subtitleId ?? ''}`,
     );
+  }
+
+  private summaryPromptFingerprint(): string {
+    return resolveSummaryPrompt(
+      this.config.summary.defaultPromptId,
+      this.config.prompts.customPresets,
+      this.config.summary.language,
+    ).fingerprint;
   }
 }
 

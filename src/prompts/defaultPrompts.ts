@@ -99,7 +99,7 @@ Use Markdown and include: Topic Overview, Outline, Key Concepts, Important Detai
     id: 'summary_critical',
     name: '批判分析版',
     type: 'summary',
-    icon: '析',
+    icon: '批',
     builtIn: true,
     template: `请以批判性思维审视这个视频。
 

@@ -35,6 +35,17 @@ This file is the restart point for future agent sessions. Keep entries short, fa
 - Bilibili subtitle endpoint still uses unsigned `x/player/wbi/v2`.
 - GM XHR fallback is non-streaming and has no explicit downgrade notice.
 
+## 2026-06-21
+
+- Added a General settings section for auto-run, renamed the summary language setting to a preferred-language setting, retained the per-video subtitle-track dropdown, and made preference changes select the matching available track.
+- Moved the ChatGPT Project root-page guidance into concise inline title text.
+- Verification: `pnpm test` passed with 111 tests and one opt-in integration skip; `pnpm build` produced userscript version 0.3.4; settings and completed-summary harness scenarios passed.
+- Added the v2 runtime prompt catalog with five built-in summary presets, a folded global custom preset editor, timestamp-grounded timeline summaries, selected-preset long-video merging, and prompt-fingerprinted caches while retaining the unchanged v1 catalog for comparison.
+- Added a reduced-motion-aware scale transition between the mascot launcher and Panel.
+- Verification: `pnpm test` passed with 112 tests and one opt-in integration skip; `pnpm build` produced userscript version 0.3.5; settings, saved-custom, launcher open, and Panel close harness interactions passed without console errors; the v1 prompt diff is empty.
+- Scoped button hover styling to the right navigation, replaced settings native selects with below-field listboxes and inset chevrons, and centralized image/connectivity runtime prompts in the v2 catalog.
+- Verification: `pnpm test` passed with 112 tests and one opt-in integration skip; `pnpm build` produced userscript version 0.3.6; harness confirmed a 4px below-field menu gap, approximately 12px chevron inset, successful option changes, unchanged body-button hover color, and no console errors.
+
 ## 2026-06-20
 
 - Reviewed the unified summary chat refactor and fixed stream-event rendering, duplicate current questions, deterministic image intent, fixed-prompt image caching, Anthropic endpoint/SSE compatibility, failure-state cleanup, conversation scroll preservation, and restored summary/image actions.
