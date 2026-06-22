@@ -31,5 +31,6 @@ export interface PromptVariables {
   summary?: string;
   question?: string;
   comments?: string;
+  targetPrompt?: string;
   [key: string]: string | number | undefined;
 }

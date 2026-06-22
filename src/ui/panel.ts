@@ -23,6 +23,10 @@ export class Panel {
   private summaryScrollRestoreGeneration = 0;
   private settingsDirty = false;
   private saveSettingsBeforeLeave?: () => boolean;
+  private transitionActive = false;
+  private transitionTimer?: ReturnType<typeof setTimeout>;
+  private entranceTarget?: 'launcher' | 'panel';
+  private entranceEndsAt = 0;
 
   constructor(private readonly controller: AppController) {
     this.activeTab = controller.config.ui.defaultTab;
@@ -51,7 +55,7 @@ export class Panel {
       const t = createUiText(this.controller.config.ui.language);
       const launcherPosition = this.controller.config.ui.launcherPosition;
       const launcher = el('div', {
-        class: `vs-launcher-wrap ${this.controller.config.ui.position} ${launcherPosition ? 'dragged' : ''}`,
+        class: `vs-launcher-wrap ${this.controller.config.ui.position} ${launcherPosition ? 'dragged' : ''} ${this.isEntering('launcher') ? 'is-entering' : ''}`,
         style: launcherPosition ? `left:${launcherPosition.x}px;top:${launcherPosition.y}px` : undefined,
       }, [
         el('button', {
@@ -73,7 +77,7 @@ export class Panel {
     }
 
     const shell = el('section', {
-      class: `vs-shell ${this.controller.config.ui.position} ${this.activeTab} `,
+      class: `vs-shell ${this.controller.config.ui.position} ${this.activeTab} ${this.isEntering('panel') ? 'is-entering' : ''}`,
       style: `--vs-width:${this.controller.config.ui.panelWidth}px`,
     });
     shell.append(this.renderResizeHandle());
@@ -132,6 +136,7 @@ export class Panel {
   destroy(): void {
     document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
     document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange);
+    if (this.transitionTimer) clearTimeout(this.transitionTimer);
     this.host.remove();
   }
 
@@ -147,7 +152,7 @@ export class Panel {
         el('div', { class: 'vs-title' }, [header.title]),
         header.caption ? el('div', { class: 'vs-subtitle' }, [header.caption]) : '',
       ]),
-      this.iconButton(t('closePanel'), () => this.controller.toggleCollapsed()),
+      this.iconButton(t('closePanel'), () => this.closePanelAnimated()),
     ]);
   }
 
@@ -338,7 +343,7 @@ export class Panel {
       launcher.classList.remove('dragging');
       if (!moved) {
         this.activeTab = 'summary';
-        void this.controller.openFromLauncher();
+        this.openFromLauncherAnimated(launcher);
         return;
       }
       const rect = launcher.getBoundingClientRect();
@@ -350,6 +355,56 @@ export class Panel {
       pointerId = undefined;
       launcher.classList.remove('dragging');
     });
+  }
+
+  private openFromLauncherAnimated(launcher: HTMLElement): void {
+    if (!canStartPanelTransition(this.transitionActive)) return;
+    this.transitionActive = true;
+    launcher.classList.add('is-opening');
+    this.scheduleTransition(() => {
+      this.beginEntrance('panel');
+      this.transitionActive = false;
+      void this.controller.openFromLauncher();
+    });
+  }
+
+  private closePanelAnimated(): void {
+    if (!canStartPanelTransition(this.transitionActive)) return;
+    const shell = this.shellNode;
+    if (!shell?.classList.contains('vs-shell')) return;
+    this.transitionActive = true;
+    shell.classList.add('is-closing');
+    this.scheduleTransition(() => {
+      this.beginEntrance('launcher');
+      this.transitionActive = false;
+      this.controller.toggleCollapsed();
+    });
+  }
+
+  private scheduleTransition(callback: () => void): void {
+    const duration = panelTransitionDuration(this.prefersReducedMotion());
+    if (duration === 0) {
+      callback();
+      return;
+    }
+    this.transitionTimer = setTimeout(() => {
+      this.transitionTimer = undefined;
+      callback();
+    }, duration);
+  }
+
+  private beginEntrance(target: 'launcher' | 'panel'): void {
+    const duration = panelTransitionDuration(this.prefersReducedMotion());
+    this.entranceTarget = duration > 0 ? target : undefined;
+    this.entranceEndsAt = Date.now() + duration;
+  }
+
+  private isEntering(target: 'launcher' | 'panel'): boolean {
+    return this.entranceTarget === target && Date.now() < this.entranceEndsAt;
+  }
+
+  private prefersReducedMotion(): boolean {
+    return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   private captureScrollIntent(): void {
@@ -441,6 +496,14 @@ export function shouldPreserveDirtySettingsView(
   hasRenderedShell: boolean,
 ): boolean {
   return activeTab === 'settings' && dirty && !collapsed && hasRenderedShell;
+}
+
+export function panelTransitionDuration(reducedMotion: boolean): number {
+  return reducedMotion ? 0 : 200;
+}
+
+export function canStartPanelTransition(transitionActive: boolean): boolean {
+  return !transitionActive;
 }
 
 type PanelIconName = 'settings' | 'summary' | 'collapse' | 'close';

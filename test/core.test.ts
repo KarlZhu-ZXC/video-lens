@@ -17,6 +17,7 @@ import {
 } from '../src/app/AppController';
 
 import { BUILT_IN_PROMPTS, getPromptTemplate } from '../src/prompts/defaultPrompts';
+import * as V2Prompts from '../src/prompts/defaultPrompts.v2';
 import { renderPrompt } from '../src/prompts/renderPrompt';
 import {
   DEFAULT_CONFIG,
@@ -51,6 +52,7 @@ import {
   SUMMARY_SCROLL_SELECTOR,
 } from '../src/ui/panel';
 import { shouldLeaveSettingsTab } from '../src/ui/panel';
+import * as PanelModule from '../src/ui/panel';
 import {
   formatTranscriptLanguage,
   formatCompactCount,
@@ -68,6 +70,7 @@ import {
 } from '../src/ui/summaryView';
 import { isVideoLensHistoryWrapper } from '../src/sources/bilibili/routeWatcher';
 import { CONNECTION_TEST_LABEL, resolveSecretInput, resolveSecretValueForSave } from '../src/ui/settingsModal';
+import * as SettingsModal from '../src/ui/settingsModal';
 import { normalizeAssetUrl } from '../src/utils/url';
 import { DEV_HARNESS_COMMAND, HARNESS_ENTRY_SCRIPT } from '../src/harness/constants';
 import { PANEL_STYLES } from '../src/ui/styles';
@@ -110,6 +113,95 @@ describe('renderPrompt', () => {
 
     expect(prompts.every((prompt) => Boolean(prompt.enTemplate))).toBe(true);
     expect(getPromptTemplate(prompts[0], 'en-US')).not.toBe(prompts[0].template);
+
+    expect(Array.isArray(V2Prompts.BUILT_IN_PROMPTS)).toBe(false);
+    const v2PromptMap = V2Prompts.BUILT_IN_PROMPTS as unknown as Record<string, { id: string }>;
+    expect(v2PromptMap.summary_plain.id).toBe('summary_plain');
+    const v2SummaryPrompts = V2Prompts.getSummaryPromptPresets();
+    expect(v2SummaryPrompts.map((prompt) => prompt.id)).toEqual([
+      'summary_plain',
+      'summary_detailed',
+      'summary_critical',
+      'summary_action',
+      'summary_timeline',
+    ]);
+    expect(v2SummaryPrompts.every((prompt) => prompt.template.includes('{{transcript}}'))).toBe(true);
+    expect(v2SummaryPrompts.every((prompt) => Boolean(prompt.enTemplate?.includes('{{transcript}}')))).toBe(true);
+  });
+
+  it('formats timeline prompts only from real subtitle ranges', async () => {
+    const formatTranscriptWithTimeline = (
+      V2Prompts as unknown as {
+        formatTranscriptWithTimeline: (transcript: {
+          lines: Array<{ from: number; to: number; text: string }>;
+          plainText: string;
+          charCount: number;
+        }) => string;
+      }
+    ).formatTranscriptWithTimeline;
+
+    expect(formatTranscriptWithTimeline({
+      lines: [
+        { from: 5, to: 9.5, text: '第一点' },
+        { from: 65, to: 70, text: '第二点' },
+      ],
+      plainText: '第一点 第二点',
+      charCount: 7,
+    })).toBe('[00:05-00:10] 第一点\n[01:05-01:10] 第二点');
+
+    const resolveSummaryPrompt = (
+      V2Prompts as unknown as {
+        resolveSummaryPrompt: (
+          id: string,
+          custom: Array<{
+            id: string;
+            name: string;
+            type: 'summary';
+            template: string;
+            builtIn: boolean;
+          }>,
+          language: 'zh-CN' | 'en-US',
+        ) => { template: string; fingerprint: string };
+      }
+    ).resolveSummaryPrompt;
+    const customBase = {
+      id: 'summary_custom',
+      name: '自定义',
+      type: 'summary' as const,
+      builtIn: false,
+    };
+    const first = resolveSummaryPrompt('summary_custom', [{ ...customBase, template: '版本 A：{{transcript}}' }], 'zh-CN');
+    const second = resolveSummaryPrompt('summary_custom', [{ ...customBase, template: '版本 B：{{transcript}}' }], 'zh-CN');
+    expect(first.template).toBe('版本 A：{{transcript}}');
+    expect(second.fingerprint).not.toBe(first.fingerprint);
+
+    let timelineRequest = '';
+    const timelineResult = await runSummaryPipeline({
+      video: {
+        source: 'bilibili',
+        sourceId: 'BV-timeline',
+        title: '时间轴视频',
+        url: 'https://www.bilibili.com/video/BV-timeline',
+      },
+      transcript: {
+        lines: [{ from: 5, to: 9.5, text: '第一点' }],
+        plainText: '第一点',
+        charCount: 3,
+      },
+      textAiClient: {
+        async complete(request) {
+          timelineRequest = request.messages[0].content;
+          return { content: '时间轴摘要' };
+        },
+      },
+      config: {
+        ...DEFAULT_CONFIG,
+        summary: { ...DEFAULT_CONFIG.summary, defaultPromptId: 'summary_timeline' },
+      },
+    });
+    expect(timelineRequest).toContain('[00:05-00:10] 第一点');
+    expect(timelineResult).toMatchObject({ promptId: 'summary_timeline' });
+    expect(timelineResult.promptFingerprint).toBeTruthy();
   });
 });
 
@@ -238,7 +330,16 @@ describe('long summary streaming', () => {
       video: { source: 'bilibili', sourceId: 'BV-concurrent', title: '并发', url: 'https://bilibili.com/video/BV-concurrent' },
       transcript: { plainText: 'a'.repeat(30), lines: [], charCount: 30 },
       textAiClient: client,
-      config: { ...DEFAULT_CONFIG, summary: { ...DEFAULT_CONFIG.summary, chunkTargetChars: 10, chunkOverlapChars: 0, maxChunks: 3 } },
+      config: {
+        ...DEFAULT_CONFIG,
+        summary: {
+          ...DEFAULT_CONFIG.summary,
+          defaultPromptId: 'summary_detailed',
+          chunkTargetChars: 10,
+          chunkOverlapChars: 0,
+          maxChunks: 3,
+        },
+      },
       onProgress: (message) => progress.push(message),
       onDelta: (partial) => deltas.push(partial.content),
     });
@@ -252,6 +353,7 @@ describe('long summary streaming', () => {
     ]);
     expect(mergePrompt.indexOf('第1段摘要')).toBeLessThan(mergePrompt.indexOf('第2段摘要'));
     expect(mergePrompt.indexOf('第2段摘要')).toBeLessThan(mergePrompt.indexOf('第3段摘要'));
+    expect(mergePrompt).toContain('## 主题概述');
     expect(deltas).toEqual([]);
   });
 
@@ -855,6 +957,14 @@ describe('summary scroll preservation', () => {
     expect(PANEL_STYLES).toContain('width: calc(100% - var(--vs-rail-width));');
     expect(PANEL_STYLES).toContain('.vs-rail-tab {\n  width: 40px;\n  height: 40px;');
     expect(PANEL_STYLES).toContain('.vs-rail-tab svg {\n  width: 20px;\n  height: 20px;');
+    expect(PANEL_STYLES).not.toContain('\nbutton:hover:not(:disabled)');
+    expect(PANEL_STYLES).toContain('.vs-rail-tab:hover:not(:disabled)');
+    expect(PANEL_STYLES).toContain('.vs-settings-select-menu {');
+    const settingsMenuRule = /\.vs-settings-select-menu \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+    expect(settingsMenuRule).toContain('position: static;');
+    expect(settingsMenuRule).toContain('margin-top: 4px;');
+    expect(PANEL_STYLES).toContain('.vs-settings-select-chevron {');
+    expect(PANEL_STYLES).toContain('right: 12px;');
   });
 });
 
@@ -1001,6 +1111,7 @@ describe('summary chat', () => {
     ], '当前问题');
 
     expect(messages.filter((message) => message.content.includes('当前问题'))).toHaveLength(1);
+    expect(messages[messages.length - 1]?.content).toContain('字幕中未提及');
   });
 
   it('detects image requests locally and always builds the fixed summary prompt', () => {
@@ -1011,6 +1122,14 @@ describe('summary chat', () => {
     expect(buildOneImagePrompt('核心摘要')).toBe(
       '根据以下视频内容总结，生成一张信息可视化的精美配图，风格清晰美观，适合作为视频总结的封面图：\n\n核心摘要',
     );
+    const centralizedPrompts = V2Prompts as unknown as {
+      ONE_IMAGE_PROMPT_TEMPLATE: string;
+      TEXT_CONNECTIVITY_TEST_PROMPT: string;
+      IMAGE_CONNECTIVITY_TEST_PROMPT: string;
+    };
+    expect(centralizedPrompts.ONE_IMAGE_PROMPT_TEMPLATE).toContain('{{summary}}');
+    expect(centralizedPrompts.TEXT_CONNECTIVITY_TEST_PROMPT).toBe('Reply with OK.');
+    expect(centralizedPrompts.IMAGE_CONNECTIVITY_TEST_PROMPT).toContain('neutral abstract background');
   });
 
   it('does not discard a generated image when cache storage is full', () => {
@@ -1361,6 +1480,11 @@ describe('ui i18n', () => {
     expect(getUiText('zh-CN', 'summary.pageTitle')).toBe('片语-AI总结');
     expect(getUiText('en-US', 'summary.pageTitle')).toBe('Video Lens - AI Summary');
     expect(getUiText('en-US', 'summary.emptyTitle')).toBe('No summary yet');
+    expect(getUiText('zh-CN', 'settings.generalGroup')).toBe('通用');
+    expect(getUiText('zh-CN', 'settings.summaryPreset')).toBe('视频总结预设');
+    expect(getUiText('zh-CN', 'settings.summaryPresetCustom')).toBe('自定义');
+    expect(getUiText('zh-CN', 'settings.summaryLanguage')).toBe('偏好字幕获取及总结语言');
+    expect(getUiText('zh-CN', 'settings.chatgptImageHint')).toBe('保持根页打开，完成后自动返回');
     expect(getUiText('fr-FR', 'actions.saveSettings')).toBe('保存设置');
     expect(getStatusText('en-US', '生成摘要')).toBe('Generating summary');
     expect(getStatusText('en-US', 'MarkDown 已导出')).toBe('MarkDown exported');
@@ -1427,7 +1551,7 @@ describe('summary transcript language label', () => {
     expect(shouldRenderSubtitleSelect(2)).toBe(true);
   });
 
-  it('clears the previous subtitle selection when summary language changes', () => {
+  it('applies the preferred language to the current subtitle options', () => {
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: {
@@ -1436,6 +1560,10 @@ describe('summary transcript language label', () => {
       },
     });
     const controller = new AppController();
+    controller.state.subtitleOptions = [
+      { id: 'zh-CN', label: '中文' },
+      { id: 'en', label: 'English' },
+    ];
     controller.state.selectedSubtitleId = 'zh-CN';
     controller.state.transcript = {
       language: '中文（自动生成）',
@@ -1447,7 +1575,7 @@ describe('summary transcript language label', () => {
 
     controller.updateConfig({ summary: { ...controller.config.summary, language: 'en-US' } });
 
-    expect(controller.state.selectedSubtitleId).toBeUndefined();
+    expect(controller.state.selectedSubtitleId).toBe('en');
     expect(controller.state.transcript).toBeUndefined();
   });
 });
@@ -1620,6 +1748,17 @@ describe('settings secret fields', () => {
     expect(resolveSecretValueForSave('saved-secret', '')).toBe('saved-secret');
     expect(resolveSecretValueForSave('saved-secret', ' Bearer new-secret ')).toBe('new-secret');
     expect(CONNECTION_TEST_LABEL).toBe('连通性测试');
+
+    const helpers = SettingsModal as unknown as {
+      customPromptStartsExpanded: (selectedId: string, customText: string) => boolean;
+      shouldExpandCustomPrompt: (previousId: string, nextId: string, hasSavedText: boolean) => boolean;
+      validateCustomPrompt: (selectedId: string, customText: string) => string;
+    };
+    expect(helpers.customPromptStartsExpanded('summary_custom', '')).toBe(true);
+    expect(helpers.customPromptStartsExpanded('summary_custom', '已保存')).toBe(false);
+    expect(helpers.shouldExpandCustomPrompt('summary_plain', 'summary_custom', false)).toBe(true);
+    expect(helpers.validateCustomPrompt('summary_custom', '   ')).toBe('请输入自定义 Prompt');
+    expect(helpers.validateCustomPrompt('summary_plain', '')).toBe('');
   });
 });
 
@@ -1665,6 +1804,17 @@ describe('panel settings navigation guard', () => {
     })).toBe(true);
     expect(saved).toBe(1);
     expect(shouldLeaveSettingsTab(true, () => false, () => true)).toBe(false);
+
+    const animation = PanelModule as unknown as {
+      panelTransitionDuration: (reducedMotion: boolean) => number;
+      canStartPanelTransition: (transitionActive: boolean) => boolean;
+    };
+    expect(animation.panelTransitionDuration(false)).toBe(200);
+    expect(animation.panelTransitionDuration(true)).toBe(0);
+    expect(animation.canStartPanelTransition(false)).toBe(true);
+    expect(animation.canStartPanelTransition(true)).toBe(false);
+    expect(PANEL_STYLES).toContain('@keyframes vs-panel-enter');
+    expect(PANEL_STYLES).toContain('@media (prefers-reduced-motion: reduce)');
   });
 });
 

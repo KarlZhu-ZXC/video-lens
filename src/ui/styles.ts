@@ -53,11 +53,6 @@ button {
   transition: background 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 
-button:hover:not(:disabled) {
-  border-color: rgba(167, 139, 250, .62);
-  background: var(--vs-surface-highest);
-}
-
 button:active:not(:disabled) {
   transform: translateY(1px);
 }
@@ -138,6 +133,15 @@ button.icon svg {
 .vs-launcher-wrap.left { left: 22px; }
 .vs-launcher-wrap.dragged {
   right: auto;
+}
+
+.vs-launcher-wrap.is-entering {
+  animation: vs-launcher-enter 200ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.vs-launcher-wrap.is-opening {
+  animation: vs-launcher-exit 200ms cubic-bezier(.4, 0, 1, 1) both;
+  pointer-events: none;
 }
 
 .vs-launcher {
@@ -239,6 +243,52 @@ button.icon svg {
 .vs-shell.left {
   left: 0;
   flex-direction: row-reverse;
+}
+
+.vs-shell.right {
+  transform-origin: right center;
+}
+
+.vs-shell.left {
+  transform-origin: left center;
+}
+
+.vs-shell.is-entering {
+  animation: vs-panel-enter 200ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.vs-shell.is-closing {
+  animation: vs-panel-exit 200ms cubic-bezier(.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+@keyframes vs-launcher-enter {
+  from { opacity: 0; transform: scale(.68); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes vs-launcher-exit {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(.68); }
+}
+
+@keyframes vs-panel-enter {
+  from { opacity: 0; transform: scale(.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes vs-panel-exit {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vs-launcher-wrap.is-entering,
+  .vs-launcher-wrap.is-opening,
+  .vs-shell.is-entering,
+  .vs-shell.is-closing {
+    animation: none;
+  }
 }
 
 .vs-resize-handle {
@@ -1816,6 +1866,99 @@ textarea {
   resize: vertical;
 }
 
+.vs-settings-select {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.vs-settings-select-trigger {
+  position: relative;
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 8px 38px 8px 10px;
+  border: 1px solid var(--vs-outline-variant);
+  border-radius: 8px;
+  background: var(--vs-surface);
+  color: var(--vs-text);
+  box-shadow: none;
+  text-align: left;
+}
+
+.vs-settings-select-trigger:focus-visible,
+.vs-settings-select.open .vs-settings-select-trigger {
+  border-color: rgba(167, 139, 250, .72);
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, .16);
+}
+
+.vs-settings-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-settings-select-chevron {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--vs-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: transform 140ms ease;
+}
+
+.vs-settings-select.open .vs-settings-select-chevron {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.vs-settings-select-menu {
+  position: static;
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--vs-outline-variant);
+  border-radius: 9px;
+  background: var(--vs-surface-high);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, .42);
+}
+
+.vs-settings-select-option {
+  width: 100%;
+  min-height: 32px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vs-secondary);
+  box-shadow: none;
+  text-align: left;
+}
+
+.vs-settings-select-option:hover,
+.vs-settings-select-option:focus-visible {
+  background: var(--vs-surface-highest);
+  color: var(--vs-text);
+  outline: none;
+}
+
+.vs-settings-select-option.selected {
+  background: rgba(124, 58, 237, .2);
+  color: var(--vs-text);
+}
+
 .vs-chat-input {
   padding: 8px 0 0 0;
   border-top: none;
@@ -1911,6 +2054,104 @@ select:focus {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: .04em;
+}
+
+.vs-field-label-inline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.vs-field-inline-hint {
+  color: var(--vs-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.vs-preset-control {
+  display: grid;
+  gap: 8px;
+}
+
+.vs-preset-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vs-preset-radio {
+  position: relative;
+  cursor: pointer;
+}
+
+.vs-preset-radio input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vs-preset-radio-control {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--vs-outline-variant);
+  border-radius: 999px;
+  background: var(--vs-surface-high);
+  color: var(--vs-secondary);
+  font-size: 11px;
+  line-height: 1;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.vs-preset-radio-control i {
+  color: var(--vs-muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.vs-preset-radio-control strong {
+  font: inherit;
+  font-weight: 700;
+}
+
+.vs-preset-radio input:checked + .vs-preset-radio-control {
+  border-color: rgba(167, 139, 250, .72);
+  background: rgba(124, 58, 237, .18);
+  color: var(--vs-text);
+}
+
+.vs-preset-radio input:focus-visible + .vs-preset-radio-control {
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, .2);
+}
+
+.vs-custom-prompt-editor {
+  display: grid;
+  gap: 7px;
+}
+
+.vs-custom-prompt-toggle {
+  justify-self: start;
+  min-height: 26px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--vs-primary);
+  font-size: 11px;
+}
+
+.vs-custom-prompt-editor textarea {
+  min-height: 132px;
+  resize: vertical;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .vs-settings-group {

@@ -6,6 +6,7 @@ export interface SummaryResult extends ReasoningTiming {
   video: VideoInfo;
   transcript: Transcript;
   promptId: string;
+  promptFingerprint?: string;
   content: string;
   reasoning?: string;
   chunkSummaries?: string[];
