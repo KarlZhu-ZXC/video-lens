@@ -5,7 +5,7 @@ export const CHATGPT_IMAGE_HEARTBEAT_KEY = 'video_lens_chatgpt_image_heartbeat_v
 export const CHATGPT_IMAGE_CHUNK_PREFIX = 'video_lens_chatgpt_image_chunk_';
 export const CHATGPT_IMAGE_CHUNK_SIZE = 512 * 1024;
 export const CHATGPT_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
-export const CHATGPT_IMAGE_JOB_TIMEOUT_MS = 5 * 60 * 1000;
+export const CHATGPT_IMAGE_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 export const CHATGPT_IMAGE_HEARTBEAT_MAX_AGE_MS = 30 * 1000;
 
 export interface ChatGptImageJob {

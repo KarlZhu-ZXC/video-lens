@@ -30,6 +30,7 @@ This file is the restart point for future agent sessions. Keep entries short, fa
 - 2026-05-19: the original feature tracker JSON parsed successfully.
 - 2026-06-19: `pnpm test` passed (81 tests, 1 opt-in integration test skipped); `pnpm build` passed; settings and one-image harness scenarios inspected successfully.
 - 2026-07-03: ChatGPT web image submission confirmation now accepts Project child-route navigation as evidence that ChatGPT received the prompt, and the submission confirmation window was widened to 45 seconds.
+- 2026-07-03: ChatGPT web image job timeout was increased from 5 minutes to 10 minutes for slower image generations.
 
 ## Open Risks
 

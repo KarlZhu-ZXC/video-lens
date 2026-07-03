@@ -202,7 +202,6 @@ describe('ChatGPT image bridge protocol', () => {
       sourceId: 'video-1',
       targetReceiverId: 'receiver-1',
       now: 1_000,
-      timeoutMs: 300_000,
     });
 
     expect(job).toEqual({
@@ -213,10 +212,10 @@ describe('ChatGPT image bridge protocol', () => {
       sourceId: 'video-1',
       targetReceiverId: 'receiver-1',
       createdAt: 1_000,
-      expiresAt: 301_000,
+      expiresAt: 601_000,
     });
-    expect(isChatGptImageJobExpired(job, 301_001)).toBe(true);
-    expect(isChatGptImageJobExpired(job, 301_000)).toBe(false);
+    expect(isChatGptImageJobExpired(job, 601_001)).toBe(true);
+    expect(isChatGptImageJobExpired(job, 601_000)).toBe(false);
   });
 
   it('splits and reconstructs image data without changing its bytes', () => {
