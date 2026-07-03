@@ -26,7 +26,7 @@ import {
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const CLAIM_SETTLE_MS = 180;
-const SUBMIT_TIMEOUT_MS = 15_000;
+const SUBMIT_TIMEOUT_MS = 45_000;
 const PROJECT_RESET_DELAY_MS = 1_500;
 const RESULT_ACK_TIMEOUT_MS = 30_000;
 
@@ -173,6 +173,22 @@ export function selectSubmittedUserMessage(
     !baselineKeys.has(message.key) && normalizeMessageText(message.text).startsWith(expectedPrefix));
 }
 
+export function hasPromptSubmissionEvidence(input: {
+  baselineKeys: Set<string>;
+  messages: UserMessageSnapshot[];
+  prompt: string;
+  currentUrl: string;
+  projectId: string;
+  projectContextHref?: string;
+}): boolean {
+  return Boolean(selectSubmittedUserMessage(input.baselineKeys, input.messages, input.prompt))
+    || isProjectChildRoute({
+      currentUrl: input.currentUrl,
+      projectId: input.projectId,
+      projectContextHref: input.projectContextHref,
+    });
+}
+
 export class ChatGptImageReceiver {
   readonly receiverId: string;
   private readonly queue: ChatGptImageJob[] = [];
@@ -273,7 +289,7 @@ export class ChatGptImageReceiver {
       const composer = await this.waitForComposer(SUBMIT_TIMEOUT_MS);
       this.fillPrompt(composer, job.prompt);
       this.publish(job, 'submitting');
-      await this.submitPrompt(composer, baselineUserMessageKeys, job.prompt);
+      await this.submitPrompt(composer, baselineUserMessageKeys, job.prompt, project.projectId);
       const jobChatUrl = await this.waitForProjectChildRoute(project.projectId, project.rootUrl, SUBMIT_TIMEOUT_MS);
       this.publish(job, 'generating');
 
@@ -376,6 +392,7 @@ export class ChatGptImageReceiver {
     composer: HTMLElement,
     baselineUserMessageKeys: Set<string>,
     prompt: string,
+    projectId: string,
   ): Promise<void> {
     const deadline = Date.now() + SUBMIT_TIMEOUT_MS;
     let button: HTMLButtonElement | undefined;
@@ -388,7 +405,14 @@ export class ChatGptImageReceiver {
     else composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
 
     while (Date.now() <= deadline) {
-      if (selectSubmittedUserMessage(baselineUserMessageKeys, this.userMessages(), prompt)) return;
+      if (hasPromptSubmissionEvidence({
+        baselineKeys: baselineUserMessageKeys,
+        messages: this.userMessages(),
+        prompt,
+        currentUrl: this.pageWindow.location.href,
+        projectId,
+        projectContextHref: this.projectContextHref(projectId),
+      })) return;
       await sleep(150);
     }
     throw new Error('ChatGPT 未接受生图提示词，发送按钮或页面结构可能已变化');

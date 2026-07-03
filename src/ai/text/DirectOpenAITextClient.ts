@@ -16,7 +16,6 @@ export class DirectOpenAITextClient implements TextAiClient {
 
     if (this.config.requestMode === 'gm_xhr') return this.completeWithGmXhr(request, apiKey);
     if (this.config.requestMode === 'fetch') return this.completeWithFetch(request, apiKey, options);
-    if (!request.stream && typeof GM_xmlhttpRequest === 'function') return this.completeWithGmXhr(request, apiKey);
 
     try {
       return await this.completeWithFetch(request, apiKey, options);

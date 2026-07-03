@@ -9,7 +9,6 @@ export class DirectOpenAIImageClient implements ImageAiClient {
     if (!this.config.apiKey) throw new Error('请先在设置中填写图片模型 API Key');
     if (this.config.requestMode === 'gm_xhr') return this.generateWithGmXhr(request);
     if (this.config.requestMode === 'fetch') return this.generateWithFetch(request, options);
-    if (typeof GM_xmlhttpRequest === 'function') return this.generateWithGmXhr(request);
 
     try {
       return await this.generateWithFetch(request, options);

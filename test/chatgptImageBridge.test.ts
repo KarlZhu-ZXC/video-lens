@@ -31,6 +31,7 @@ import {
   isProjectChildRoute,
   scheduleProjectReset,
   waitForJobAcknowledgement,
+  hasPromptSubmissionEvidence,
   selectSubmittedUserMessage,
   selectJobGeneratedImage,
   selectNewGeneratedImage,
@@ -650,6 +651,16 @@ describe('ChatGPT image receiver', () => {
     );
 
     expect(selected?.key).toBe('new-message-id');
+  });
+
+  it('treats Project child navigation as prompt submission evidence', () => {
+    expect(hasPromptSubmissionEvidence({
+      baselineKeys: new Set(['old-message-id']),
+      messages: [{ key: 'old-message-id', text: 'old prompt' }],
+      prompt: 'Generate an image from this video summary',
+      currentUrl: 'https://chatgpt.com/g/g-p-abc/c/child',
+      projectId: 'g-p-abc',
+    })).toBe(true);
   });
 });
 
