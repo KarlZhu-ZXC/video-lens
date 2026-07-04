@@ -67,6 +67,7 @@ export function renderSummaryView(controller: AppController): HTMLElement {
     placeholder: composerState.placeholder,
     disabled: composerState.textareaDisabled,
   }) as HTMLTextAreaElement;
+  let composing = false;
 
   const submit = () => {
     if (composerState.action === 'start_summary') {
@@ -78,8 +79,14 @@ export function renderSummaryView(controller: AppController): HTMLElement {
     void controller.askSummaryQuestion(question);
   };
 
+  textarea.addEventListener('compositionstart', () => {
+    composing = true;
+  });
+  textarea.addEventListener('compositionend', () => {
+    composing = false;
+  });
   textarea.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || event.shiftKey) return;
+    if (!shouldSubmitComposerOnKeydown(event, composing)) return;
     event.preventDefault();
     submit();
   });
@@ -383,6 +390,15 @@ function renderSubtitleConfigChip(
 
 export function imageConfigurationLabel(config: LocalConfig['imageAi'], unsetLabel: string): string {
   return config.mode === 'chatgpt_web' ? 'ChatGPT Web' : (config.model || unsetLabel);
+}
+
+export function shouldSubmitComposerOnKeydown(event: {
+  key: string;
+  shiftKey: boolean;
+  isComposing?: boolean;
+  keyCode?: number;
+}, composing = false): boolean {
+  return event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && !composing;
 }
 
 function renderSummaryToolbar(controller: AppController, contentToCopy?: string): HTMLElement {

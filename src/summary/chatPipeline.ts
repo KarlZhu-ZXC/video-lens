@@ -3,14 +3,35 @@ import {
   getPromptById,
   getPromptTemplate,
   ONE_IMAGE_PROMPT_TEMPLATE,
+  resolveImagePrompt,
 } from '../prompts/defaultPrompts.v2';
 import { renderPrompt } from '../prompts/renderPrompt';
 import type { LocalConfig } from '../store/types';
 import { extractThinkBlocks } from './think';
 import type { SummaryResult, ChatMessage } from './types';
 
-export function buildOneImagePrompt(summary: string): string {
-  return renderPrompt(ONE_IMAGE_PROMPT_TEMPLATE, { summary: summary.trim() });
+export function buildOneImagePrompt(summary: string, config?: LocalConfig): string {
+  const template = config
+    ? resolveImagePrompt(config.imageAi.promptId, config.prompts.customPresets, config.summary.language).template
+    : ONE_IMAGE_PROMPT_TEMPLATE;
+  const prompt = renderPrompt(template, { summary: summary.trim() });
+  if (!config) return prompt;
+  const aspectRatio = imageAspectRatioLabel(config.imageAi.size, config.summary.language);
+  return config.summary.language === 'en-US'
+    ? `${prompt}\n\nAspect ratio: ${aspectRatio}. Compose the image for this ratio.`
+    : `${prompt}\n\n画幅比例：${aspectRatio}。请按这个比例构图。`;
+}
+
+export function imageAspectRatioLabel(size: string, language: 'zh-CN' | 'en-US' = 'zh-CN'): string {
+  const labels: Record<string, { zh: string; en: string }> = {
+    '16:9': { zh: '16:9 横屏', en: '16:9 landscape' },
+    '4:3': { zh: '4:3 横屏', en: '4:3 landscape' },
+    '1:1': { zh: '1:1 方图', en: '1:1 square' },
+    '9:16': { zh: '9:16 竖屏', en: '9:16 portrait' },
+    '9:21': { zh: '9:21 长竖屏', en: '9:21 tall portrait' },
+  };
+  const label = labels[size] ?? { zh: size, en: size };
+  return language === 'en-US' ? label.en : label.zh;
 }
 
 export async function askSummaryChat(

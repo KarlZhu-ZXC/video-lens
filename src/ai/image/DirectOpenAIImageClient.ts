@@ -32,7 +32,7 @@ export class DirectOpenAIImageClient implements ImageAiClient {
       body: JSON.stringify({
         model: request.model,
         prompt: sanitizeImagePrompt(request.prompt),
-        size: request.size,
+        size: normalizeImageRequestSize(this.config.apiUrl, request.size),
         quality: request.quality,
         response_format: normalizeImageResponseFormat(this.config.apiUrl, request.responseFormat),
         n: request.n ?? 1,
@@ -57,7 +57,7 @@ export class DirectOpenAIImageClient implements ImageAiClient {
         data: JSON.stringify({
           model: request.model,
           prompt: sanitizeImagePrompt(request.prompt),
-          size: request.size,
+          size: normalizeImageRequestSize(this.config.apiUrl, request.size),
           quality: request.quality,
           response_format: normalizeImageResponseFormat(this.config.apiUrl, request.responseFormat),
           n: request.n ?? 1,
@@ -118,8 +118,27 @@ export function sanitizeImagePrompt(prompt: string): string {
   return prompt.trim().replace(/\s+/g, ' ').slice(0, 1200);
 }
 
+export function normalizeImageRequestSize(apiUrl: string, size: string | undefined): string | undefined {
+  if (!size) return size;
+  if (!isOpenAIImageUrl(apiUrl)) return size;
+  const openAiSupported = new Set(['auto', '1024x1024', '1536x1024', '1024x1536']);
+  if (openAiSupported.has(size)) return size;
+  if (size === '1:1') return '1024x1024';
+  if (size === '16:9' || size === '4:3') return '1536x1024';
+  if (size === '9:16' || size === '9:21') return '1024x1536';
+  return size;
+}
+
 function isMiniMaxImageUrl(apiUrl: string): boolean {
   return /minimax|minimaxi/i.test(apiUrl);
+}
+
+function isOpenAIImageUrl(apiUrl: string): boolean {
+  try {
+    return new URL(apiUrl).hostname.endsWith('openai.com');
+  } catch {
+    return /openai/i.test(apiUrl);
+  }
 }
 
 function firstString(value: unknown): string | undefined {

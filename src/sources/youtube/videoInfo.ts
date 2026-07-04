@@ -79,18 +79,44 @@ export function parseYoutubeCaptionTracks(response: YoutubePlayerResponse): Yout
 
 export function readYoutubePlayerResponse(): YoutubePlayerResponse | undefined {
   if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
+  const pageUrl = typeof location === 'undefined' ? '' : location.href;
+  const candidates: YoutubePlayerResponse[] = [];
   const direct = (window as any).ytInitialPlayerResponse;
-  if (direct) return direct;
+  if (direct) candidates.push(direct);
+  candidates.push(...readYoutubePlayerResponsesFromText(Array.from(document.scripts).map((script) => script.textContent ?? '').join('\n')));
+  return selectBestYoutubePlayerResponse(candidates, pageUrl);
+}
 
-  const scripts = Array.from(document.scripts);
-  for (const script of scripts) {
-    const text = script.textContent ?? '';
-    const index = text.indexOf('ytInitialPlayerResponse');
-    if (index < 0) continue;
+export function readYoutubePlayerResponseFromHtml(html: string, pageUrl: string): YoutubePlayerResponse | undefined {
+  return selectBestYoutubePlayerResponse(readYoutubePlayerResponsesFromText(html), pageUrl);
+}
+
+function readYoutubePlayerResponsesFromText(text: string): YoutubePlayerResponse[] {
+  const responses: YoutubePlayerResponse[] = [];
+  let offset = 0;
+  while (offset < text.length) {
+    const index = text.indexOf('ytInitialPlayerResponse', offset);
+    if (index < 0) break;
     const json = extractAssignedJson(text.slice(index));
-    if (json) return json as YoutubePlayerResponse;
+    if (json) responses.push(json as YoutubePlayerResponse);
+    offset = index + 'ytInitialPlayerResponse'.length;
   }
-  return undefined;
+  return responses;
+}
+
+function selectBestYoutubePlayerResponse(
+  candidates: YoutubePlayerResponse[],
+  pageUrl: string,
+): YoutubePlayerResponse | undefined {
+  const videoId = extractYoutubeVideoId(pageUrl);
+  const matching = videoId
+    ? candidates.filter((candidate) => candidate.videoDetails?.videoId === videoId)
+    : candidates;
+  const pool = matching.length ? matching : candidates;
+  return (
+    pool.find((candidate) => parseYoutubeCaptionTracks(candidate).length > 0) ??
+    pool[0]
+  );
 }
 
 export function extractYoutubeVideoId(url: string): string | undefined {

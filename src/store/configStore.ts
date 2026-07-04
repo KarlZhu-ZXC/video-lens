@@ -1,5 +1,6 @@
 import { safeJsonParse } from '../utils/json';
 import { CONFIG_KEY, LEGACY_CONFIG_KEY, type LocalConfig } from './types';
+import { DEFAULT_IMAGE_PROMPT_ID } from '../prompts/defaultPrompts.v2';
 
 export const DEFAULT_CONFIG: LocalConfig = {
   schemaVersion: 1,
@@ -23,11 +24,12 @@ export const DEFAULT_CONFIG: LocalConfig = {
     apiUrl: 'https://api.openai.com/v1/images/generations',
     apiKey: '',
     model: 'gpt-image-1',
-    size: '1024x1024',
+    size: '16:9',
     quality: 'medium',
     responseFormat: 'b64_json',
     requestMode: 'auto',
     chatgptConversationUrl: '',
+    promptId: DEFAULT_IMAGE_PROMPT_ID,
   },
   summary: {
     autoRun: true,
@@ -142,10 +144,18 @@ function pickImageAi(value: LocalConfig['imageAi']): LocalConfig['imageAi'] {
     apiUrl: value.apiUrl,
     apiKey: value.apiKey,
     model: value.model,
-    size: value.size,
+    size: normalizeImageSizePreference(value.size),
     quality: value.quality,
     responseFormat: value.responseFormat,
     requestMode: 'auto',
     chatgptConversationUrl: value.chatgptConversationUrl ?? '',
+    promptId: value.promptId ?? DEFAULT_IMAGE_PROMPT_ID,
   };
+}
+
+function normalizeImageSizePreference(size: string | undefined): string {
+  if (size === '1024x1024') return '1:1';
+  if (size === '1536x1024') return '16:9';
+  if (size === '1024x1536') return '9:16';
+  return size ?? '16:9';
 }

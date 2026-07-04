@@ -3,6 +3,7 @@ export type PromptType =
   | 'chunk_summary'
   | 'merge_summary'
   | 'video_insights'
+  | 'image'
   | 'comment_summary';
 
 export interface PromptPreset {

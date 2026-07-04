@@ -10,6 +10,8 @@ export const TEXT_CONNECTIVITY_TEST_PROMPT = 'Reply with OK.';
 export const IMAGE_CONNECTIVITY_TEST_PROMPT =
   'Connectivity test image. Simple neutral abstract background, no text, no logo.';
 
+export const DEFAULT_IMAGE_PROMPT_ID = 'image_infographic';
+
 /**
  * 改良版内置 Prompts。
  *
@@ -534,6 +536,182 @@ Transcript:
 
 Question: {{question}}`,
   },
+  image_infographic: {
+    id: 'image_infographic',
+    name: '信息图',
+    type: 'image',
+    icon: '图',
+    builtIn: true,
+    template: `根据以下视频总结，生成一张横向信息可视化配图。
+
+视觉方向：
+- 清晰、现代、精致，适合作为视频总结的主视觉。
+- 用 3–5 个清楚的视觉模块表达核心观点、步骤、对比或数据关系。
+- 使用图标、抽象图形、卡片、箭头、层级分组和柔和光效，但不要堆满细节。
+- 如果涉及人物、行业或场景，可以用象征性插画表达，不要使用真实品牌 Logo。
+- 不要生成大段文字、乱码、小字、水印、二维码或界面截图；必要文字只保留极少量可读标题感元素。
+
+视频总结：
+{{summary}}`,
+    enTemplate: `Create a horizontal infographic-style hero image from the video summary below.
+
+Visual direction:
+- Clear, modern, polished, suitable as the main visual for a video summary.
+- Express the core ideas, steps, comparisons, or data relationships through 3-5 readable visual modules.
+- Use icons, abstract shapes, cards, arrows, grouped hierarchy, and subtle glow without overcrowding the image.
+- If people, industries, or scenarios appear, represent them symbolically; do not use real brand logos.
+- Avoid long text, gibberish, tiny labels, watermarks, QR codes, or UI screenshots. Keep any text-like elements minimal and title-like.
+
+Video summary:
+{{summary}}`,
+  },
+  image_cover: {
+    id: 'image_cover',
+    name: '封面图',
+    type: 'image',
+    icon: '封',
+    builtIn: true,
+    template: `根据以下视频总结，生成一张高点击感的视频封面主视觉。
+
+视觉方向：
+- 构图大胆，主体明确，前景有一个强视觉焦点，背景提供情绪和主题线索。
+- 使用高对比光影、干净留白和电影感景深，让缩略图尺寸下也清楚。
+- 可以把关键概念拟人化为人物、物件、场景或符号，但不要堆叠太多信息。
+- 整体像专业 YouTube/Bilibili 封面设计，不要像 PPT 页面。
+- 避免真实品牌 Logo、水印、二维码和大量文字；不要生成难以辨认的小字。
+
+视频总结：
+{{summary}}`,
+    enTemplate: `Create a high-click-through video thumbnail hero image from the video summary below.
+
+Visual direction:
+- Bold composition with one clear focal subject in the foreground and thematic context in the background.
+- Use high-contrast lighting, clean negative space, and cinematic depth so it remains readable at thumbnail size.
+- Turn key ideas into symbolic characters, objects, scenes, or visual metaphors, but avoid overcrowding.
+- It should feel like a professional YouTube/Bilibili cover, not a slide deck.
+- Avoid real brand logos, watermarks, QR codes, and long text. Do not create unreadable tiny labels.
+
+Video summary:
+{{summary}}`,
+  },
+  image_poster: {
+    id: 'image_poster',
+    name: '海报',
+    type: 'image',
+    icon: '海',
+    builtIn: true,
+    template: `根据以下视频总结，生成一张电影海报感的主题视觉。
+
+视觉方向：
+- 强氛围、强叙事，画面像一张主题海报，而不是信息卡片。
+- 用中心主体、前后景层次、戏剧化光线和统一色调表达视频的核心情绪。
+- 适合观点、事件、人物、商业、财经、科技类视频的高级主视觉。
+- 可以加入象征性道具和环境隐喻，但不要依赖文字解释。
+- 避免真实品牌 Logo、水印、二维码、长标题和小字；不要照搬任何真实电影海报。
+
+视频总结：
+{{summary}}`,
+    enTemplate: `Create a cinematic poster-style thematic visual from the video summary below.
+
+Visual direction:
+- Atmospheric and narrative, like a theme poster rather than an information card.
+- Use a central subject, layered foreground/background, dramatic lighting, and a coherent color palette to express the core mood.
+- Suitable for opinion, event, people, business, finance, and technology videos.
+- Add symbolic props and environmental metaphors where useful, but do not rely on text to explain the idea.
+- Avoid real brand logos, watermarks, QR codes, long titles, and tiny labels. Do not copy any real movie poster.
+
+Video summary:
+{{summary}}`,
+  },
+  image_illustration: {
+    id: 'image_illustration',
+    name: '插画',
+    type: 'image',
+    icon: '插',
+    builtIn: true,
+    template: `根据以下视频总结，生成一张温和、精致、叙事感强的插画。
+
+视觉方向：
+- 使用现代 editorial illustration 风格，线条干净，色彩协调，细节有层次但不凌乱。
+- 把视频核心内容转化为一个可理解的场景：人物正在行动、物件有关系、环境能说明主题。
+- 适合知识、生活、故事、教育、科技解释类视频。
+- 画面要友好、清爽、有留白，不要过度商业广告感。
+- 避免真实品牌 Logo、水印、二维码、长文字和小字。
+
+视频总结：
+{{summary}}`,
+    enTemplate: `Create a warm, polished, narrative illustration from the video summary below.
+
+Visual direction:
+- Use a modern editorial illustration style with clean lines, coordinated colors, and layered but uncluttered detail.
+- Turn the core content into an understandable scene: people taking action, related objects, and an environment that explains the topic.
+- Suitable for knowledge, lifestyle, story, education, and technology explainer videos.
+- Keep it friendly, fresh, and spacious rather than overly commercial.
+- Avoid real brand logos, watermarks, QR codes, long text, and tiny labels.
+
+Video summary:
+{{summary}}`,
+  },
+  image_minimal: {
+    id: 'image_minimal',
+    name: '极简',
+    type: 'image',
+    icon: '简',
+    builtIn: true,
+    template: `根据以下视频总结，生成一张极简抽象主视觉。
+
+视觉方向：
+- 使用少量几何形状、柔和渐变、空间层次和一个明确象征物表达核心主题。
+- 画面干净、高级、留白充足，适合放在摘要页或文章封面。
+- 只保留一个主要视觉隐喻，不要画复杂场景，不要做信息图。
+- 色彩控制在 2–4 个主色，强调平衡、秩序和可读性。
+- 避免真实品牌 Logo、水印、二维码、长文字、小字和杂乱背景。
+
+视频总结：
+{{summary}}`,
+    enTemplate: `Create a minimal abstract hero image from the video summary below.
+
+Visual direction:
+- Use a small number of geometric shapes, soft gradients, spatial depth, and one clear symbolic object to express the core theme.
+- Clean, premium, and spacious, suitable for a summary page or article cover.
+- Keep only one main visual metaphor. Do not create a complex scene or an infographic.
+- Limit the palette to 2-4 main colors and emphasize balance, order, and readability.
+- Avoid real brand logos, watermarks, QR codes, long text, tiny labels, and busy backgrounds.
+
+Video summary:
+{{summary}}`,
+  },
+  image_pixel_rpg: {
+    id: 'image_pixel_rpg',
+    name: 'Pixel RPG',
+    type: 'image',
+    icon: '像',
+    builtIn: true,
+    template: `根据以下视频总结，生成一张像素 RPG 风格的信息图主视觉。
+
+视觉方向：
+- 使用精致 16-bit pixel art / retro fantasy RPG game UI 风格，横向构图。
+- 把核心概念拟人化为 RPG 职业、角色、道具、徽章或阵营，并按重要性或类别分层排列。
+- 可以使用城堡、旗帜、盾牌、卷轴、宝箱、任务面板、像素按钮、排行榜横幅等游戏 UI 元素。
+- 画面要像一张可读的 RPG strategy board / ranking board：层级清楚、角色鲜明、信息密度高但不拥挤。
+- 如果视频涉及行业、公司、技术或观点，用象征性角色和道具表达，不要使用真实品牌 Logo。
+- 避免大段文字、乱码、小字、水印、二维码；中文标签不要成为主要信息承载，优先靠角色和构图表达。
+
+视频总结：
+{{summary}}`,
+    enTemplate: `Create a Pixel RPG style infographic hero image from the video summary below.
+
+Visual direction:
+- Use polished 16-bit pixel art / retro fantasy RPG game UI styling in a horizontal composition.
+- Personify the core concepts as RPG classes, characters, props, badges, or factions, arranged by importance or category.
+- Use castles, banners, shields, scrolls, chests, quest panels, pixel buttons, and ranking ribbons where useful.
+- The image should feel like a readable RPG strategy board / ranking board: clear hierarchy, distinct characters, high information density without clutter.
+- If the video involves industries, companies, technology, or opinions, express them through symbolic characters and props; do not use real brand logos.
+- Avoid long text, gibberish, tiny labels, watermarks, and QR codes. Let characters and composition carry the meaning more than labels.
+
+Video summary:
+{{summary}}`,
+  },
 } satisfies Record<string, PromptPreset>;
 
 export type BuiltInPromptId = keyof typeof BUILT_IN_PROMPTS;
@@ -544,6 +722,15 @@ export const SUMMARY_PROMPT_ORDER = [
   'summary_critical',
   'summary_action',
   'summary_timeline',
+] as const satisfies readonly BuiltInPromptId[];
+
+export const IMAGE_PROMPT_ORDER = [
+  'image_infographic',
+  'image_cover',
+  'image_poster',
+  'image_illustration',
+  'image_minimal',
+  'image_pixel_rpg',
 ] as const satisfies readonly BuiltInPromptId[];
 
 export function getPromptById(id: string, custom: PromptPreset[] = []): PromptPreset | undefined {
@@ -577,6 +764,32 @@ export function resolveSummaryPrompt(
 
 export function getSummaryPromptPresets(): PromptPreset[] {
   return SUMMARY_PROMPT_ORDER.map((id) => BUILT_IN_PROMPTS[id]);
+}
+
+export interface EffectiveImagePrompt {
+  preset: PromptPreset;
+  template: string;
+  fingerprint: string;
+}
+
+export function resolveImagePrompt(
+  id: string | undefined,
+  custom: PromptPreset[] = [],
+  language: 'zh-CN' | 'en-US' = 'zh-CN',
+): EffectiveImagePrompt {
+  const promptId = id || DEFAULT_IMAGE_PROMPT_ID;
+  const preset = getPromptById(promptId, custom);
+  if (!preset || preset.type !== 'image') throw new Error(`找不到生图 Prompt：${promptId}`);
+  const template = getPromptTemplate(preset, language);
+  return {
+    preset,
+    template,
+    fingerprint: stableHash(`${preset.id}\n${language}\n${template}`),
+  };
+}
+
+export function getImagePromptPresets(): PromptPreset[] {
+  return IMAGE_PROMPT_ORDER.map((id) => BUILT_IN_PROMPTS[id]);
 }
 
 export function formatTranscriptWithTimeline(transcript: Transcript): string {

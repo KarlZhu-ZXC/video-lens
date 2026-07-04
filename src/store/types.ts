@@ -38,6 +38,7 @@ export interface LocalConfig {
     responseFormat: 'url' | 'b64_json' | 'auto';
     requestMode: 'fetch' | 'gm_xhr' | 'auto';
     chatgptConversationUrl: string;
+    promptId: string;
   };
   summary: {
     autoRun: boolean;

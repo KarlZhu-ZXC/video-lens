@@ -5,7 +5,7 @@ import {
   listOfficialYoutubeCaptionOptions,
   type OfficialYoutubeCaptionOption,
 } from './officialApi';
-import { parseYoutubeCaptionTracks, readYoutubePlayerResponse } from './videoInfo';
+import { parseYoutubeCaptionTracks, readYoutubePlayerResponse, readYoutubePlayerResponseFromHtml } from './videoInfo';
 import type { YoutubeCaptionTrack } from './types';
 import { fetchYoutubeiCaptionTracks } from './youtubei';
 
@@ -32,18 +32,21 @@ export async function getYoutubeTranscript(
     const transcript = option ? await downloadOfficialYoutubeTranscript(option, config) : undefined;
     if (transcript) return transcript;
   }
-  const track = selectYoutubeCaptionTrack(await loadYoutubeCaptionTracks(video.sourceId), subtitleId, language);
-  if (!track) throw new Error('当前 YouTube 视频没有可读取字幕');
+  const tracks = await loadYoutubeCaptionTracks(video.sourceId);
+  const candidates = youtubeCaptionTranscriptCandidates(tracks, subtitleId, language);
+  if (!candidates.length) throw new Error('当前 YouTube 视频没有可读取字幕');
 
-  const url = withCaptionFormat(track.baseUrl, 'json3');
-  const res = await fetch(url, { credentials: 'include' });
-  if (!res.ok) throw new Error(`YouTube 字幕请求失败：${res.status}`);
-  const text = await res.text();
-  try {
-    return parseYoutubeJson3Transcript(JSON.parse(text), track);
-  } catch {
-    return parseYoutubeXmlTranscript(text, track);
+  let lastError: unknown;
+  for (const track of candidates) {
+    try {
+      const transcript = await downloadYoutubeCaptionTrack(track);
+      if (transcript.charCount > 0) return transcript;
+      lastError = new Error(`YouTube 字幕为空：${track.label}`);
+    } catch (error) {
+      lastError = error;
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error('当前 YouTube 视频没有可读取字幕');
 }
 
 export async function getOfficialYoutubeTranscriptById(
@@ -62,7 +65,9 @@ export function getYoutubeCaptionTracks(): YoutubeCaptionTrack[] {
 export async function loadYoutubeCaptionTracks(videoId?: string): Promise<YoutubeCaptionTrack[]> {
   const pageTracks = getYoutubeCaptionTracks();
   if (pageTracks.length || !videoId) return pageTracks;
-  return fetchYoutubeiCaptionTracks(videoId);
+  const youtubeiTracks = await fetchYoutubeiCaptionTracks(videoId);
+  if (youtubeiTracks.length) return youtubeiTracks;
+  return fetchYoutubeWatchCaptionTracks(videoId);
 }
 
 export function buildTargetLanguageTranslatedTracks(
@@ -169,6 +174,62 @@ function buildTranslatedTrack(
     baseUrl: withCaptionTranslation(source.baseUrl, targetLanguage),
     translatedFrom: source.languageCode,
   };
+}
+
+function youtubeCaptionTranscriptCandidates(
+  tracks: YoutubeCaptionTrack[],
+  subtitleId: string | undefined,
+  language: LocalConfig['summary']['language'],
+): YoutubeCaptionTrack[] {
+  const selected = selectYoutubeCaptionTrack(tracks, subtitleId, language);
+  const targetLanguage = targetTranslationLanguage(language);
+  const languageMatches = language === 'en-US'
+    ? tracks.filter((track) => isEnglish(track.languageCode))
+    : tracks.filter((track) => isChinese(track.languageCode));
+  const translated = tracks
+    .filter((track) => track.isTranslatable && !isSameLanguageFamily(track.languageCode, targetLanguage))
+    .map((track) => buildTranslatedTrack(tracks, track.id, targetLanguage))
+    .filter((track: YoutubeCaptionTrack | undefined): track is YoutubeCaptionTrack => Boolean(track));
+  return uniqueCaptionTracks([
+    selected,
+    ...languageMatches,
+    ...translated,
+    ...tracks,
+  ]);
+}
+
+function uniqueCaptionTracks(tracks: Array<YoutubeCaptionTrack | undefined>): YoutubeCaptionTrack[] {
+  const seen = new Set<string>();
+  return tracks.filter((track): track is YoutubeCaptionTrack => {
+    if (!track || seen.has(track.id)) return false;
+    seen.add(track.id);
+    return true;
+  });
+}
+
+async function downloadYoutubeCaptionTrack(track: YoutubeCaptionTrack): Promise<Transcript> {
+  const url = withCaptionFormat(track.baseUrl, 'json3');
+  const res = await fetch(url, { credentials: 'include' });
+  if (!res.ok) throw new Error(`YouTube 字幕请求失败：${res.status}`);
+  const text = await res.text();
+  try {
+    return parseYoutubeJson3Transcript(JSON.parse(text), track);
+  } catch {
+    return parseYoutubeXmlTranscript(text, track);
+  }
+}
+
+async function fetchYoutubeWatchCaptionTracks(videoId: string): Promise<YoutubeCaptionTrack[]> {
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) return [];
+    const response = readYoutubePlayerResponseFromHtml(await res.text(), `https://www.youtube.com/watch?v=${videoId}`);
+    return response ? parseYoutubeCaptionTracks(response) : [];
+  } catch {
+    return [];
+  }
 }
 
 function withCaptionFormat(baseUrl: string, format: string): string {

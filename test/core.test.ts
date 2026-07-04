@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { chunkText } from '../src/ai/chunking';
-import { normalizeImageResponseFormat, parseGeneratedImage, sanitizeImagePrompt } from '../src/ai/image/DirectOpenAIImageClient';
+import {
+  normalizeImageRequestSize,
+  normalizeImageResponseFormat,
+  parseGeneratedImage,
+  sanitizeImagePrompt,
+} from '../src/ai/image/DirectOpenAIImageClient';
 import { buildChatCompletionsPayload, normalizeChatCompletionsUrl } from '../src/ai/text/DirectOpenAITextClient';
 import { normalizeAnthropicUrl } from '../src/ai/text/AnthropicTextClient';
 import { applyTextConfig, normalizeApiKey, normalizeOpenAIBaseUrl } from '../src/ai/text/providers';
@@ -12,6 +17,7 @@ import {
   buildSummaryMarkdown,
   cacheGeneratedImage,
   generatedImageHref,
+  imageGenerationCacheIdentity,
   shouldToastStatus,
   summaryMarkdownFileName,
 } from '../src/app/AppController';
@@ -22,6 +28,7 @@ import { renderPrompt } from '../src/prompts/renderPrompt';
 import {
   DEFAULT_CONFIG,
   loadConfig,
+  mergeConfigForTest,
   saveConfig,
   stripSensitiveConfigForStorage,
 } from '../src/store/configStore';
@@ -63,6 +70,7 @@ import {
   shouldShowFollowUpIntents,
   videoStatItems,
   shouldShowSummaryToolbar,
+  shouldSubmitComposerOnKeydown,
   summaryComposerState,
   SUMMARY_CONTEXT_ORDER,
   videoMetadataItems,
@@ -81,7 +89,13 @@ import {
   nextImagePreviewScale,
 } from '../src/ui/imagePreview';
 import { getActiveProvider, isSupportedVideoUrl } from '../src/sources/providers';
-import { extractYoutubeVideoId, parseYoutubePlayerResponse } from '../src/sources/youtube/videoInfo';
+import {
+  extractYoutubeVideoId,
+  parseYoutubeCaptionTracks,
+  parseYoutubePlayerResponse,
+  readYoutubePlayerResponse,
+  readYoutubePlayerResponseFromHtml,
+} from '../src/sources/youtube/videoInfo';
 import { getYoutubeVideoFromOfficialApi } from '../src/sources/youtube/officialApi';
 import {
   fetchBilibiliFollowerCount,
@@ -602,6 +616,69 @@ describe('YouTube source parsing', () => {
     expect(parsed.tracks[1].label).toBe('Chinese (auto)');
   });
 
+  it('prefers the current YouTube player response that contains captions', () => {
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = globalThis.document;
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { href: 'https://www.youtube.com/watch?v=current-video' },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        ytInitialPlayerResponse: {
+          videoDetails: { videoId: 'current-video', title: 'No captions on direct response' },
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        scripts: [{
+          textContent: `var ytInitialPlayerResponse = ${JSON.stringify({
+            videoDetails: { videoId: 'current-video', title: 'With captions' },
+            captions: {
+              playerCaptionsTracklistRenderer: {
+                captionTracks: [{
+                  baseUrl: 'https://caption.example/current',
+                  languageCode: 'en',
+                  name: { simpleText: 'English' },
+                }],
+              },
+            },
+          })};`,
+        }],
+        querySelector: () => undefined,
+        title: 'Current - YouTube',
+      },
+    });
+
+    expect(parseYoutubeCaptionTracks(readYoutubePlayerResponse() ?? {}).map((track) => track.id)).toEqual(['en']);
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+  });
+
+  it('extracts YouTube caption tracks from fetched watch HTML', () => {
+    const html = `ytInitialPlayerResponse = ${JSON.stringify({
+      videoDetails: { videoId: 'html-video', title: 'HTML Video' },
+      captions: {
+        playerCaptionsTracklistRenderer: {
+          captionTracks: [{
+            baseUrl: 'https://caption.example/html',
+            languageCode: 'en-US',
+            name: { simpleText: 'English (United States)' },
+          }],
+        },
+      },
+    })};`;
+
+    expect(parseYoutubeCaptionTracks(
+      readYoutubePlayerResponseFromHtml(html, 'https://www.youtube.com/watch?v=html-video') ?? {},
+    ).map((track) => track.id)).toEqual(['en-US']);
+  });
+
   it('maps statistics returned by the configured YouTube official API', async () => {
     const originalFetch = globalThis.fetch;
     let requestedUrl = '';
@@ -824,6 +901,68 @@ describe('YouTube source parsing', () => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
     Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
   });
+
+  it('skips empty YouTube caption tracks and tries the next candidate', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { ytInitialPlayerResponse: undefined } });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { scripts: [], querySelector: () => undefined, title: '' } });
+    globalThis.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      const textUrl = String(url);
+      if (textUrl.includes('/youtubei/v1/player')) {
+        return new Response(
+          JSON.stringify({
+            captions: {
+              playerCaptionsTracklistRenderer: {
+                captionTracks: [
+                  {
+                    baseUrl: 'https://caption.example/empty',
+                    languageCode: 'en',
+                    name: { simpleText: 'English (auto-generated)' },
+                    kind: 'asr',
+                  },
+                  {
+                    baseUrl: 'https://caption.example/full',
+                    languageCode: 'en-US',
+                    name: { simpleText: 'English (United States)' },
+                  },
+                ],
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (textUrl.startsWith('https://caption.example/empty')) {
+        return new Response(JSON.stringify({ events: [] }), { status: 200 });
+      }
+      if (textUrl.startsWith('https://caption.example/full')) {
+        return new Response(JSON.stringify({
+          events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Readable subtitle' }] }],
+        }), { status: 200 });
+      }
+      throw new Error(`Unexpected URL ${textUrl}`);
+    }) as any;
+
+    const transcript = await getYoutubeTranscript(
+      {
+        source: 'youtube',
+        sourceId: 'yt-empty-first',
+        title: 'Transcript',
+        url: 'https://www.youtube.com/watch?v=yt-empty-first',
+      },
+      undefined,
+      'en-US',
+      DEFAULT_CONFIG,
+    );
+
+    expect(transcript.languageCode).toBe('en-US');
+    expect(transcript.plainText).toContain('Readable subtitle');
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  });
 });
 
 describe('extractThinkBlocks', () => {
@@ -988,6 +1127,11 @@ describe('summary chat UI states', () => {
     expect(shouldShowSummaryToolbar({ hasSummary: false, streaming: true })).toBe(false);
     expect(shouldShowSummaryToolbar({ hasSummary: true, streaming: false })).toBe(true);
     expect(SUMMARY_CONTEXT_ORDER).toEqual(['video', 'configuration']);
+    expect(shouldSubmitComposerOnKeydown({ key: 'Enter', shiftKey: false })).toBe(true);
+    expect(shouldSubmitComposerOnKeydown({ key: 'Enter', shiftKey: true })).toBe(false);
+    expect(shouldSubmitComposerOnKeydown({ key: 'Enter', shiftKey: false, isComposing: true })).toBe(false);
+    expect(shouldSubmitComposerOnKeydown({ key: 'Enter', shiftKey: false, keyCode: 229 })).toBe(false);
+    expect(shouldSubmitComposerOnKeydown({ key: 'Enter', shiftKey: false }, true)).toBe(false);
   });
 
   it('offers fixed intents only on the latest completed assistant response', () => {
@@ -1114,7 +1258,7 @@ describe('summary chat', () => {
     expect(messages[messages.length - 1]?.content).toContain('字幕中未提及');
   });
 
-  it('detects image requests locally and always builds the fixed summary prompt', () => {
+  it('detects image requests locally and keeps the legacy default image prompt available', () => {
     expect(isImageGenerationRequest('请根据这个视频画一张图')).toBe(true);
     expect(isImageGenerationRequest('画一个苹果')).toBe(true);
     expect(isImageGenerationRequest('生成配图')).toBe(true);
@@ -1132,6 +1276,48 @@ describe('summary chat', () => {
     expect(centralizedPrompts.IMAGE_CONNECTIVITY_TEST_PROMPT).toContain('neutral abstract background');
   });
 
+  it('renders configured image prompt styles and isolates them by fingerprint', () => {
+    const prompts = V2Prompts as unknown as {
+      getImagePromptPresets: () => Array<{ id: string; name: string; template: string }>;
+      resolveImagePrompt: (
+        id: string,
+        custom?: Array<{ id: string; name: string; type: string; template: string; builtIn: boolean }>,
+      ) => { preset: { id: string }; template: string; fingerprint: string };
+    };
+    const imagePrompts = prompts.getImagePromptPresets();
+
+    expect(imagePrompts.map((prompt) => prompt.id)).toEqual([
+      'image_infographic',
+      'image_cover',
+      'image_poster',
+      'image_illustration',
+      'image_minimal',
+      'image_pixel_rpg',
+    ]);
+    const pixelTemplate = imagePrompts.find((prompt) => prompt.id === 'image_pixel_rpg')?.template ?? '';
+    expect(pixelTemplate).toContain('像素 RPG');
+    expect(pixelTemplate).not.toMatch(/tier\s*list/i);
+    const pixelPrompt = buildOneImagePrompt('核心摘要', {
+      ...DEFAULT_CONFIG,
+      imageAi: { ...DEFAULT_CONFIG.imageAi, promptId: 'image_pixel_rpg' },
+    });
+    expect(pixelPrompt).toContain('像素 RPG');
+    expect(pixelPrompt).toContain('画幅比例：16:9 横屏');
+    expect(buildOneImagePrompt('core summary', {
+      ...DEFAULT_CONFIG,
+      summary: { ...DEFAULT_CONFIG.summary, language: 'en-US' },
+      imageAi: { ...DEFAULT_CONFIG.imageAi, promptId: 'image_cover', size: '9:16' },
+    })).toContain('Aspect ratio: 9:16 portrait');
+
+    const defaultPrompt = prompts.resolveImagePrompt('image_infographic');
+    const pixelPromptConfig = prompts.resolveImagePrompt('image_pixel_rpg');
+    expect(defaultPrompt.fingerprint).not.toBe(pixelPromptConfig.fingerprint);
+    expect(DEFAULT_CONFIG.imageAi.size).toBe('16:9');
+    expect(mergeConfigForTest({ imageAi: { size: '1536x1024' } }).imageAi.size).toBe('16:9');
+    expect(imageGenerationCacheIdentity({ ...DEFAULT_CONFIG.imageAi, size: '16:9' }))
+      .not.toBe(imageGenerationCacheIdentity({ ...DEFAULT_CONFIG.imageAi, size: '9:16' }));
+  });
+
   it('does not discard a generated image when cache storage is full', () => {
     expect(() => cacheGeneratedImage(
       { set: () => { throw new Error('quota exceeded'); } },
@@ -1147,6 +1333,9 @@ describe('image generation client helpers', () => {
   it('normalizes requests, responses, prompts, and download URLs', () => {
     expect(normalizeImageResponseFormat('https://api.minimaxi.com/v1/image_generation', 'b64_json')).toBe('base64');
     expect(normalizeImageResponseFormat('https://api.openai.com/v1/images/generations', 'b64_json')).toBe('b64_json');
+    expect(normalizeImageRequestSize('https://api.openai.com/v1/images/generations', '16:9')).toBe('1536x1024');
+    expect(normalizeImageRequestSize('https://api.openai.com/v1/images/generations', '9:21')).toBe('1024x1536');
+    expect(normalizeImageRequestSize('https://api.minimaxi.com/v1/image_generation', '16:9')).toBe('16:9');
     expect(parseGeneratedImage({ data: [{ base64: 'abc' }] }).dataUrl).toBe('data:image/png;base64,abc');
     expect(parseGeneratedImage({ data: { image_base64: ['def'] } }).dataUrl).toBe('data:image/png;base64,def');
     expect(parseGeneratedImage({ data: { image_base64: 'ghi' } }).dataUrl).toBe('data:image/png;base64,ghi');
@@ -1483,6 +1672,10 @@ describe('ui i18n', () => {
     expect(getUiText('zh-CN', 'settings.generalGroup')).toBe('通用');
     expect(getUiText('zh-CN', 'settings.summaryPreset')).toBe('视频总结预设');
     expect(getUiText('zh-CN', 'settings.summaryPresetCustom')).toBe('自定义');
+    expect(getUiText('zh-CN', 'settings.imagePromptPreset')).toBe('生图风格预设');
+    expect(getUiText('zh-CN', 'settings.imagePresetPixelRpg')).toBe('Pixel RPG');
+    expect(getUiText('zh-CN', 'settings.imageSize')).toBe('图片比例');
+    expect(getUiText('en-US', 'settings.imageSizeWide')).toBe('Landscape 16:9');
     expect(getUiText('zh-CN', 'settings.summaryLanguage')).toBe('偏好字幕获取及总结语言');
     expect(getUiText('zh-CN', 'settings.chatgptImageHint')).toBe('保持根页打开，完成后自动返回');
     expect(getUiText('fr-FR', 'actions.saveSettings')).toBe('保存设置');

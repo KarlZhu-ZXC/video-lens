@@ -18,7 +18,7 @@ import { getErrorMessage } from '../utils/errors';
 import { stableHash } from '../utils/hash';
 import {
   IMAGE_CONNECTIVITY_TEST_PROMPT,
-  ONE_IMAGE_PROMPT_TEMPLATE,
+  resolveImagePrompt,
   resolveSummaryPrompt,
   TEXT_CONNECTIVITY_TEST_PROMPT,
 } from '../prompts/defaultPrompts.v2';
@@ -150,9 +150,10 @@ export class AppController {
       const summaryContent = this.state.summary!.content;
 
       if (isImageGenerationRequest(trimmed)) {
-        const imagePrompt = buildOneImagePrompt(summaryContent);
+        const imagePrompt = buildOneImagePrompt(summaryContent, this.config);
+        const imagePromptFingerprint = this.imagePromptFingerprint();
         const cacheKey = stableHash(
-          `${this.state.summary!.video.source}:${this.state.summary!.video.sourceId}:${summaryContent}:${imageGenerationCacheIdentity(this.config.imageAi)}:${ONE_IMAGE_PROMPT_TEMPLATE}`,
+          `${this.state.summary!.video.source}:${this.state.summary!.video.sourceId}:${summaryContent}:${imageGenerationCacheIdentity(this.config.imageAi)}:${imagePromptFingerprint}`,
         );
         this.state.streamingSummaryInsight!.content = '正在呼叫画师，请稍候...';
         this.emit();
@@ -480,6 +481,14 @@ export class AppController {
       this.config.summary.language,
     ).fingerprint;
   }
+
+  private imagePromptFingerprint(): string {
+    return resolveImagePrompt(
+      this.config.imageAi.promptId,
+      this.config.prompts.customPresets,
+      this.config.summary.language,
+    ).fingerprint;
+  }
 }
 
 const TOAST_DURATION_MS = 3600;
@@ -547,8 +556,8 @@ export function cacheGeneratedImage(
 
 export function imageGenerationCacheIdentity(config: LocalConfig['imageAi']): string {
   return config.mode === 'chatgpt_web'
-    ? `chatgpt_web:${normalizeChatGptProjectUrl(config.chatgptConversationUrl)}`
-    : `api:${config.apiUrl}:${config.model}`;
+    ? `chatgpt_web:${normalizeChatGptProjectUrl(config.chatgptConversationUrl)}:${config.size}`
+    : `api:${config.apiUrl}:${config.model}:${config.size}`;
 }
 
 function sanitizeFileName(name: string): string {

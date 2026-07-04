@@ -21,7 +21,7 @@ This file is the restart point for future agent sessions. Keep entries short, fa
 - ASR is researched but not implemented.
 - Text and image AI each use independent Base URL, API Key, and model settings without a model-provider selector.
 - Clicking the launcher performs cache-first summary generation.
-- Unified summary chat handles follow-up questions and explicit image requests. Image generation uses a fixed prompt plus summary; JSON and DOM card composition are removed.
+- Unified summary chat handles follow-up questions and explicit image requests. Image generation uses the selected global image style prompt plus summary; JSON and DOM card composition are removed.
 - Text connections support OpenAI-compatible and native Anthropic protocols. Reasoning (DeepSeek `<think>`) is now explicitly parsed and visualized in the UI inside an expandable `<details>` block.
 
 ## Verification Log
@@ -31,6 +31,9 @@ This file is the restart point for future agent sessions. Keep entries short, fa
 - 2026-06-19: `pnpm test` passed (81 tests, 1 opt-in integration test skipped); `pnpm build` passed; settings and one-image harness scenarios inspected successfully.
 - 2026-07-03: ChatGPT web image submission confirmation now accepts Project child-route navigation as evidence that ChatGPT received the prompt, and the submission confirmation window was widened to 45 seconds.
 - 2026-07-03: ChatGPT web image job timeout was increased from 5 minutes to 10 minutes for slower image generations.
+- 2026-07-04: Added global image style presets for image generation, including Pixel RPG, plus a folded custom image prompt editor. Image prompt fingerprints now participate in generated-image cache identity.
+- 2026-07-04: Summary chat Enter handling now respects IME composition, image generation supports `16:9`, `4:3`, `1:1`, `9:16`, and `9:21` ratio selection with `16:9` as the default, image cache identity includes ratio, and the Pixel RPG prompt now uses RPG strategy-board wording.
+- 2026-07-04: YouTube subtitle loading now prefers the current player response with captions, falls back to fetched watch-page captions when youtubei has no tracks, and skips empty caption tracks before trying the next candidate.
 
 ## Open Risks
 
