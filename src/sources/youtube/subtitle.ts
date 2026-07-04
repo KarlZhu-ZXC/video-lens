@@ -48,6 +48,8 @@ export async function getYoutubeTranscript(
   }
   const panelTranscript = await readYoutubeTranscriptPanel(video.sourceId, candidates[0]);
   if (panelTranscript?.charCount) return panelTranscript;
+  const chapterTranscript = readYoutubeChapterOutlineTranscript(candidates[0]);
+  if (chapterTranscript?.charCount) return chapterTranscript;
   throw lastError instanceof Error ? lastError : new Error('当前 YouTube 视频没有可读取字幕');
 }
 
@@ -355,11 +357,12 @@ async function readYoutubeTranscriptPanel(
   const existing = parseYoutubeTranscriptPanel(track);
   if (existing.charCount > 0) return existing;
 
-  clickYoutubeTranscriptButton();
+  clickYoutubeTranscriptPanelControl();
   for (let attempt = 0; attempt < 24; attempt += 1) {
     await wait(250);
     const transcript = parseYoutubeTranscriptPanel(track);
     if (transcript.charCount > 0) return transcript;
+    clickYoutubeTranscriptPanelControl();
   }
   return undefined;
 }
@@ -375,21 +378,54 @@ function isCurrentYoutubeVideo(videoId: string): boolean {
   }
 }
 
-function clickYoutubeTranscriptButton(): void {
-  const pattern = /(show transcript|transcript|显示文字稿|显示转录|文字稿|字幕稿)/i;
+function clickYoutubeTranscriptPanelControl(): void {
+  const transcriptPattern = /(show transcript|transcript|内容转文字|转写文稿|显示文字稿|显示转录|文字稿|字幕稿)/i;
+  const visibleTranscriptTarget = findYoutubeActionElement(
+    transcriptPattern,
+    true,
+  );
+  if (visibleTranscriptTarget) {
+    visibleTranscriptTarget.click();
+    return;
+  }
+  const visibleExpandTarget = findYoutubeActionElement(/(\.\.\.\s*more|\.\.\.更多|show more|显示更多)/i, true);
+  if (visibleExpandTarget) {
+    visibleExpandTarget.click();
+    return;
+  }
+  findYoutubeActionElement(
+    transcriptPattern,
+    false,
+  )?.click();
+}
+
+function findYoutubeActionElement(pattern: RegExp, visibleOnly: boolean): HTMLElement | undefined {
   const closePattern = /(close transcript|关闭)/i;
   const candidates = Array.from(document.querySelectorAll<HTMLElement>(
-    'button, ytd-button-renderer, tp-yt-paper-button',
+    'button, ytd-button-renderer, tp-yt-paper-button, yt-chip-cloud-chip-renderer',
   ));
-  const target = candidates.find((element) => {
-    const label = [
-      element.getAttribute('aria-label') ?? '',
-      element.getAttribute('title') ?? '',
-      element.textContent ?? '',
-    ].join(' ').replace(/\s+/g, ' ').trim();
-    return pattern.test(label) && !closePattern.test(label);
-  });
-  target?.click();
+  return candidates
+    .map((element) => ({ element, label: youtubeElementLabel(element), visible: isElementVisible(element) }))
+    .filter((item) =>
+      pattern.test(item.label) &&
+      !closePattern.test(item.label) &&
+      (!visibleOnly || item.visible))
+    .sort((a, b) => Number(b.visible) - Number(a.visible))[0]?.element;
+}
+
+function youtubeElementLabel(element: HTMLElement): string {
+  return [
+    element.getAttribute('aria-label') ?? '',
+    element.getAttribute('title') ?? '',
+    element.textContent ?? '',
+  ].join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function isElementVisible(element: HTMLElement): boolean {
+  const style = typeof getComputedStyle === 'function' ? getComputedStyle(element) : undefined;
+  if (style?.display === 'none' || style?.visibility === 'hidden') return false;
+  const rect = element.getBoundingClientRect?.();
+  return Boolean(rect && (rect.width > 0 || rect.height > 0));
 }
 
 function parseYoutubeTranscriptPanel(track: YoutubeCaptionTrack | undefined): Transcript {
@@ -413,6 +449,53 @@ function parseYoutubeTranscriptPanel(track: YoutubeCaptionTrack | undefined): Tr
     plainText,
     charCount: plainText.length,
   };
+}
+
+function readYoutubeChapterOutlineTranscript(track: YoutubeCaptionTrack | undefined): Transcript | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const chapterNodes = Array.from(document.querySelectorAll<HTMLElement>(
+    'ytd-macro-markers-list-item-renderer',
+  ));
+  const lines = uniqueSubtitleLines(chapterNodes
+    .map((node) => parseYoutubeChapterLine(node.textContent ?? ''))
+    .filter((line: SubtitleLine | undefined): line is SubtitleLine => Boolean(line)));
+  if (!lines.length) return undefined;
+  const plainText = [
+    '[00:00] YouTube transcript was unavailable; using the video chapter outline as fallback.',
+    ...lines.map(formatLine),
+  ].join('\n');
+  return {
+    language: track?.label ? `${track.label} chapters` : 'YouTube chapters',
+    languageCode: track?.languageCode,
+    lines,
+    plainText,
+    charCount: plainText.length,
+  };
+}
+
+function parseYoutubeChapterLine(input: string): SubtitleLine | undefined {
+  const normalized = input.replace(/\s+/g, ' ').trim();
+  const timestamp = readFirstTimestamp(normalized);
+  if (!timestamp) return undefined;
+  const title = dedupeRepeatedChapterTitle(normalized.slice(0, normalized.indexOf(timestamp)).trim());
+  if (!title || /^章节|chapters?$/i.test(title)) return undefined;
+  const from = parseYoutubeTimestamp(timestamp);
+  return { from, to: from, text: title };
+}
+
+function dedupeRepeatedChapterTitle(input: string): string {
+  const repeated = input.match(/^(.+?)\s+\1$/);
+  return (repeated?.[1] ?? input).trim();
+}
+
+function uniqueSubtitleLines(lines: SubtitleLine[]): SubtitleLine[] {
+  const seen = new Set<string>();
+  return lines.filter((line) => {
+    const key = `${line.from}:${line.text}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function readYoutubeTranscriptSegments(): Array<{ from: number; text: string }> {

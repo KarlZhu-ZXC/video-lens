@@ -154,7 +154,7 @@ function pickImageAi(value: LocalConfig['imageAi']): LocalConfig['imageAi'] {
 }
 
 function normalizeImageSizePreference(size: string | undefined): string {
-  if (size === '1024x1024') return '1:1';
+  if (size === '1024x1024') return '16:9';
   if (size === '1536x1024') return '16:9';
   if (size === '1024x1536') return '9:16';
   return size ?? '16:9';

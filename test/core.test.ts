@@ -1058,6 +1058,180 @@ Next &amp; line`,
     Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
     Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
   });
+
+  it('expands YouTube description before opening the transcript panel fallback', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = globalThis.document;
+    const originalLocation = globalThis.location;
+    const originalGetComputedStyle = (globalThis as any).getComputedStyle;
+    let descriptionExpanded = false;
+    let transcriptOpened = false;
+    const actionNode = (text: string, onClick: () => void, visible = true) => ({
+      textContent: text,
+      getAttribute: () => '',
+      getBoundingClientRect: () => ({ width: visible ? 80 : 0, height: visible ? 32 : 0 }),
+      click: onClick,
+    });
+    const segmentNode = (timestamp: string, text: string) => ({
+      textContent: `${timestamp} ${text}`,
+      querySelector: (selector: string) => {
+        if (selector.includes('segment-text') || selector.includes('yt-formatted-string')) return { textContent: text };
+        if (selector.includes('timestamp')) return { textContent: timestamp };
+        return undefined;
+      },
+    });
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { href: 'https://www.youtube.com/watch?v=yt-panel-expand' },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        ytInitialPlayerResponse: {
+          videoDetails: { videoId: 'yt-panel-expand' },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [
+                {
+                  baseUrl: 'https://caption.example/panel?v=yt-panel-expand&lang=en-US',
+                  languageCode: 'en-US',
+                  name: { simpleText: 'English (United States)' },
+                },
+              ],
+            },
+          },
+        },
+        setTimeout: (callback: () => void) => {
+          callback();
+          return 0 as any;
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        scripts: [],
+        title: 'Panel - YouTube',
+        querySelector: () => undefined,
+        querySelectorAll: (selector: string) => {
+          if (selector === 'ytd-transcript-segment-renderer') {
+            return transcriptOpened
+              ? [segmentNode('0:00', 'Opened after description expand')]
+              : [] as any;
+          }
+          if (selector.includes('button') || selector.includes('tp-yt-paper-button')) {
+            return [
+              actionNode('...更多', () => { descriptionExpanded = true; }),
+              ...(descriptionExpanded
+                ? [actionNode('内容转文字', () => { transcriptOpened = true; })]
+                : []),
+            ] as any;
+          }
+          return [] as any;
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'getComputedStyle', {
+      configurable: true,
+      value: () => ({ display: 'block', visibility: 'visible' }),
+    });
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ events: [] }), { status: 200 })) as any;
+
+    const transcript = await getYoutubeTranscript(
+      {
+        source: 'youtube',
+        sourceId: 'yt-panel-expand',
+        title: 'Panel',
+        url: 'https://www.youtube.com/watch?v=yt-panel-expand',
+      },
+      'en-US',
+      'en-US',
+      DEFAULT_CONFIG,
+    );
+
+    expect(descriptionExpanded).toBe(true);
+    expect(transcriptOpened).toBe(true);
+    expect(transcript.plainText).toContain('Opened after description expand');
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, value: originalGetComputedStyle });
+  });
+
+  it('uses YouTube chapter outline when captions and transcript panel are unavailable', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = globalThis.document;
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { href: 'https://www.youtube.com/watch?v=yt-chapters' },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        ytInitialPlayerResponse: {
+          videoDetails: { videoId: 'yt-chapters' },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [
+                {
+                  baseUrl: 'https://caption.example/chapters?v=yt-chapters&lang=en-US',
+                  languageCode: 'en-US',
+                  name: { simpleText: 'English (United States)' },
+                },
+              ],
+            },
+          },
+        },
+        setTimeout: (callback: () => void) => {
+          callback();
+          return 0 as any;
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        scripts: [],
+        title: 'Chapters - YouTube',
+        querySelector: () => undefined,
+        querySelectorAll: (selector: string) => {
+          if (selector === 'ytd-macro-markers-list-item-renderer') {
+            return [
+              { textContent: 'Intro Intro 0:00 Intro 0:00' },
+              { textContent: 'Thing 1 Thing 1 0:15 Thing 1 0:15' },
+            ] as any;
+          }
+          return [] as any;
+        },
+      },
+    });
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ events: [] }), { status: 200 })) as any;
+
+    const transcript = await getYoutubeTranscript(
+      {
+        source: 'youtube',
+        sourceId: 'yt-chapters',
+        title: 'Chapters',
+        url: 'https://www.youtube.com/watch?v=yt-chapters',
+      },
+      'en-US',
+      'en-US',
+      DEFAULT_CONFIG,
+    );
+
+    expect(transcript.language).toBe('English (United States) chapters');
+    expect(transcript.plainText).toContain('using the video chapter outline as fallback');
+    expect(transcript.plainText).toContain('[00:00] Intro');
+    expect(transcript.plainText).toContain('[00:15] Thing 1');
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+  });
 });
 
 describe('extractThinkBlocks', () => {
@@ -1408,6 +1582,7 @@ describe('summary chat', () => {
     const pixelPromptConfig = prompts.resolveImagePrompt('image_pixel_rpg');
     expect(defaultPrompt.fingerprint).not.toBe(pixelPromptConfig.fingerprint);
     expect(DEFAULT_CONFIG.imageAi.size).toBe('16:9');
+    expect(mergeConfigForTest({ imageAi: { size: '1024x1024' } }).imageAi.size).toBe('16:9');
     expect(mergeConfigForTest({ imageAi: { size: '1536x1024' } }).imageAi.size).toBe('16:9');
     expect(imageGenerationCacheIdentity({ ...DEFAULT_CONFIG.imageAi, size: '16:9' }))
       .not.toBe(imageGenerationCacheIdentity({ ...DEFAULT_CONFIG.imageAi, size: '9:16' }));
@@ -1790,7 +1965,7 @@ describe('ui i18n', () => {
     expect(getUiText('en-US', 'summary.pageTitle')).toBe('Video Lens - AI Summary');
     expect(getUiText('en-US', 'summary.emptyTitle')).toBe('No summary yet');
     expect(getUiText('zh-CN', 'settings.generalGroup')).toBe('通用');
-    expect(getUiText('zh-CN', 'settings.summaryPreset')).toBe('文本总结预设');
+    expect(getUiText('zh-CN', 'settings.summaryPreset')).toBe('总结风格预设');
     expect(getUiText('zh-CN', 'settings.summaryPresetCustom')).toBe('自定义');
     expect(getUiText('zh-CN', 'settings.imagePromptPreset')).toBe('生图风格预设');
     expect(getUiText('zh-CN', 'settings.imagePresetPixelRpg')).toBe('Pixel RPG');
@@ -1803,6 +1978,7 @@ describe('ui i18n', () => {
     expect(getStatusText('en-US', 'MarkDown 已导出')).toBe('MarkDown exported');
     expect(getStatusText('en-US', '网络请求失败')).toBe('网络请求失败');
   });
+
 });
 
 describe('panel resizing', () => {
