@@ -34,6 +34,8 @@ This file is the restart point for future agent sessions. Keep entries short, fa
 - 2026-07-04: Added global image style presets for image generation, including Pixel RPG, plus a folded custom image prompt editor. Image prompt fingerprints now participate in generated-image cache identity.
 - 2026-07-04: Summary chat Enter handling now respects IME composition, image generation supports `16:9`, `4:3`, `1:1`, `9:16`, and `9:21` ratio selection with `16:9` as the default, image cache identity includes ratio, and the Pixel RPG prompt now uses RPG strategy-board wording.
 - 2026-07-04: YouTube subtitle loading now prefers the current player response with captions, falls back to fetched watch-page captions when youtubei has no tracks, and skips empty caption tracks before trying the next candidate.
+- 2026-07-05: YouTube subtitle loading now also tries JSON3, SRV3, VTT, unsigned timedtext URLs, and finally the current page's Transcript panel DOM when caption downloads return empty content; clearing the current video cache now removes all summary variants for that video and resets transcript/runtime summary state.
+- 2026-07-05: Settings labels now use Text Configuration, Image Configuration, Text Summary Preset, and Model Connectivity Test; the text summary preset control moved from General into Text Configuration.
 
 ## Open Risks
 

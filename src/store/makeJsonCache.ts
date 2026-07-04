@@ -40,6 +40,16 @@ export function makeJsonCache<T>(storageKey: string, legacyStorageKey?: string) 
       delete data[key];
       saveAll(data);
     },
+    deleteWhere(predicate: (value: T, key: string, updatedAt: number) => boolean): void {
+      const data = loadAll();
+      let changed = false;
+      Object.entries(data).forEach(([key, envelope]) => {
+        if (!predicate(envelope.value, key, envelope.updatedAt)) return;
+        delete data[key];
+        changed = true;
+      });
+      if (changed) saveAll(data);
+    },
     clear(): void {
       saveAll({});
     },

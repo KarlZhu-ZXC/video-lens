@@ -8,7 +8,7 @@ import { normalizeChatGptProjectUrl } from '../ai/image/chatgptBridgeProtocol';
 import { getImagePromptPresets, getSummaryPromptPresets } from '../prompts/defaultPrompts.v2';
 import type { PromptPreset } from '../prompts/promptTypes';
 
-export const CONNECTION_TEST_LABEL = '连通性测试';
+export const CONNECTION_TEST_LABEL = '模型连通测试';
 const CONNECTION_TEST_TOOLTIP = '会实际发送一次轻量 API 请求，用于检查连通性，可能产生少量调用费用。';
 const CHATGPT_CONNECTION_TEST_TOOLTIP = '只检查 ChatGPT Project 根页接收端是否在线，不会发送生图请求。';
 type SaveScope = 'all' | 'text' | 'image';
@@ -189,7 +189,6 @@ export function renderSettingsView(controller: AppController, options: SettingsV
     el('div', { class: 'vs-settings-scroll' }, [
       group(t('settings.generalGroup'), [
         field(t('settings.summaryAutoRun'), summaryAutoRunSelect),
-        field(t('settings.summaryPreset'), presetControl),
       ]),
       group(t('settings.languageGroup'), [
         field(t('settings.language'), languageSelect),
@@ -198,6 +197,7 @@ export function renderSettingsView(controller: AppController, options: SettingsV
       el('section', { class: 'vs-settings-group' }, [
         settingsHeader(t('settings.textGroup'), async () => { if (saveSettings('text')) await controller.testTextConnection(); }),
         field(t('settings.textApiStyle'), textApiStyle),
+        field(t('settings.summaryPreset'), presetControl),
         field(t('settings.baseUrl'), textBaseUrl),
         field('API Key', textKey),
         field(t('settings.model'), textModel),

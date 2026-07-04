@@ -347,24 +347,30 @@ export class AppController {
 
   clearCurrentSummaryCache(): void {
     const video = this.state.video;
-    if (video) summaryCache.delete(this.summaryCacheKey(video, this.state.selectedSubtitleId));
-    this.state.summary = undefined;
-    this.state.streamingSummary = undefined;
-    this.state.summaryRequestPending = false;
-    this.state.summaryChatHistory = [];
-    this.state.streamingSummaryInsight = undefined;
+    if (video) {
+      summaryCache.deleteWhere((summary) =>
+        summary.video.source === video.source &&
+        summary.video.sourceId === video.sourceId);
+    }
+    this.clearSummaryRuntimeState();
     this.setStatus('已清除此视频缓存');
   }
 
   clearAllCaches(): void {
     summaryCache.clear();
     imageCache.clear();
+    this.clearSummaryRuntimeState();
+    this.setStatus('已清空全部缓存');
+  }
+
+  private clearSummaryRuntimeState(): void {
     this.state.summary = undefined;
     this.state.streamingSummary = undefined;
     this.state.summaryRequestPending = false;
     this.state.summaryChatHistory = [];
     this.state.streamingSummaryInsight = undefined;
-    this.setStatus('已清空全部缓存');
+    this.state.transcript = undefined;
+    this.state.selectedSubtitleId = undefined;
   }
 
   toggleCollapsed(): void {

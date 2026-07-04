@@ -107,6 +107,7 @@ import {
   getYoutubeSubtitleOptions,
   getYoutubeTranscript,
   parseYoutubeJson3Transcript,
+  parseYoutubeVttTranscript,
   parseYoutubeXmlTranscript,
   selectYoutubeCaptionTrack,
 } from '../src/sources/youtube/subtitle';
@@ -747,6 +748,23 @@ describe('YouTube source parsing', () => {
     Object.defineProperty(globalThis, 'DOMParser', { configurable: true, value: originalDomParser });
   });
 
+  it('parses VTT captions into transcript lines', () => {
+    const transcript = parseYoutubeVttTranscript(
+      `WEBVTT
+
+00:00:00.000 --> 00:00:01.500
+Hello <b>there</b>
+
+00:01:02.000 --> 00:01:04.000
+Next &amp; line`,
+      { id: 'en', label: 'English', languageCode: 'en', baseUrl: 'https://caption.example/en' },
+    );
+
+    expect(transcript.lines).toHaveLength(2);
+    expect(transcript.plainText).toContain('[00:00] Hello there');
+    expect(transcript.plainText).toContain('[01:02] Next & line');
+  });
+
   it('prefers English captions, translated English captions, then fallback captions', () => {
     const tracks = [
       {
@@ -962,6 +980,83 @@ describe('YouTube source parsing', () => {
     globalThis.fetch = originalFetch;
     Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
     Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  });
+
+  it('falls back to the YouTube transcript panel when caption downloads are empty', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = globalThis.document;
+    const originalLocation = globalThis.location;
+    const segmentNode = (timestamp: string, text: string) => ({
+      textContent: `${timestamp} ${text}`,
+      querySelector: (selector: string) => {
+        if (selector.includes('segment-text') || selector.includes('yt-formatted-string')) return { textContent: text };
+        if (selector.includes('timestamp')) return { textContent: timestamp };
+        return undefined;
+      },
+    });
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { href: 'https://www.youtube.com/watch?v=yt-panel' },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        ytInitialPlayerResponse: {
+          videoDetails: { videoId: 'yt-panel' },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [
+                {
+                  baseUrl: 'https://caption.example/panel?v=yt-panel&lang=en-US',
+                  languageCode: 'en-US',
+                  name: { simpleText: 'English (United States)' },
+                },
+              ],
+            },
+          },
+        },
+        setTimeout,
+      },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        scripts: [],
+        title: 'Panel - YouTube',
+        querySelector: () => undefined,
+        querySelectorAll: (selector: string) => {
+          if (selector === 'ytd-transcript-segment-renderer') {
+            return [
+              segmentNode('0:00', 'Transcript panel line'),
+              segmentNode('0:04', 'Second panel line'),
+            ] as any;
+          }
+          return [] as any;
+        },
+      },
+    });
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ events: [] }), { status: 200 })) as any;
+
+    const transcript = await getYoutubeTranscript(
+      {
+        source: 'youtube',
+        sourceId: 'yt-panel',
+        title: 'Panel',
+        url: 'https://www.youtube.com/watch?v=yt-panel',
+      },
+      'en-US',
+      'en-US',
+      DEFAULT_CONFIG,
+    );
+
+    expect(transcript.languageCode).toBe('en-US');
+    expect(transcript.plainText).toContain('[00:00] Transcript panel line');
+    expect(transcript.plainText).toContain('[00:04] Second panel line');
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
   });
 });
 
@@ -1471,7 +1566,7 @@ describe('AppController cache management and clipboard', () => {
     expect(englishKey).not.toBe(languageKey);
   });
 
-  it('clears the current video summary cache and state summary', () => {
+  it('clears the current video summary caches and runtime summary state', () => {
     const data = new Map<string, string>();
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
@@ -1496,16 +1591,41 @@ describe('AppController cache management and clipboard', () => {
       content: '缓存摘要',
       createdAt: Date.now(),
     };
+    controller.state.transcript = controller.state.summary.transcript;
+    controller.state.selectedSubtitleId = 'zh-CN';
+    controller.state.streamingSummary = { ...controller.state.summary, content: '流式摘要' };
+    controller.state.summaryRequestPending = true;
     controller.state.summaryChatHistory = [{ role: 'user', content: '旧问题' }];
     controller.state.streamingSummaryInsight = { role: 'assistant', content: '旧回答' };
-    summaryCache.set((controller as any).summaryCacheKey(controller.state.video.sourceId), controller.state.summary);
+    const currentKey = (controller as any).summaryCacheKey(controller.state.video, 'zh-CN');
+    const otherSubtitleKey = (controller as any).summaryCacheKey(controller.state.video, 'en-US');
+    const otherVideoKey = (controller as any).summaryCacheKey({
+      ...controller.state.video,
+      sourceId: 'BV-other',
+      bvid: 'BV-other',
+    }, 'zh-CN');
+    summaryCache.set(currentKey, controller.state.summary);
+    summaryCache.set(otherSubtitleKey, {
+      ...controller.state.summary,
+      transcript: { plainText: '英文字幕', lines: [], charCount: 4 },
+    });
+    summaryCache.set(otherVideoKey, {
+      ...controller.state.summary,
+      video: { ...controller.state.video, sourceId: 'BV-other', bvid: 'BV-other' },
+    });
 
     controller.clearCurrentSummaryCache();
 
     expect(controller.state.summary).toBeUndefined();
+    expect(controller.state.streamingSummary).toBeUndefined();
+    expect(controller.state.summaryRequestPending).toBe(false);
     expect(controller.state.summaryChatHistory).toEqual([]);
     expect(controller.state.streamingSummaryInsight).toBeUndefined();
-    expect(summaryCache.get((controller as any).summaryCacheKey('BV-clear'))).toBeUndefined();
+    expect(controller.state.transcript).toBeUndefined();
+    expect(controller.state.selectedSubtitleId).toBeUndefined();
+    expect(summaryCache.get(currentKey)).toBeUndefined();
+    expect(summaryCache.get(otherSubtitleKey)).toBeUndefined();
+    expect(summaryCache.get(otherVideoKey)).toBeTruthy();
     expect(controller.state.status).toBe('已清除此视频缓存');
   });
 
@@ -1670,7 +1790,7 @@ describe('ui i18n', () => {
     expect(getUiText('en-US', 'summary.pageTitle')).toBe('Video Lens - AI Summary');
     expect(getUiText('en-US', 'summary.emptyTitle')).toBe('No summary yet');
     expect(getUiText('zh-CN', 'settings.generalGroup')).toBe('通用');
-    expect(getUiText('zh-CN', 'settings.summaryPreset')).toBe('视频总结预设');
+    expect(getUiText('zh-CN', 'settings.summaryPreset')).toBe('文本总结预设');
     expect(getUiText('zh-CN', 'settings.summaryPresetCustom')).toBe('自定义');
     expect(getUiText('zh-CN', 'settings.imagePromptPreset')).toBe('生图风格预设');
     expect(getUiText('zh-CN', 'settings.imagePresetPixelRpg')).toBe('Pixel RPG');
@@ -1940,7 +2060,7 @@ describe('settings secret fields', () => {
     });
     expect(resolveSecretValueForSave('saved-secret', '')).toBe('saved-secret');
     expect(resolveSecretValueForSave('saved-secret', ' Bearer new-secret ')).toBe('new-secret');
-    expect(CONNECTION_TEST_LABEL).toBe('连通性测试');
+    expect(CONNECTION_TEST_LABEL).toBe('模型连通测试');
 
     const helpers = SettingsModal as unknown as {
       customPromptStartsExpanded: (selectedId: string, customText: string) => boolean;

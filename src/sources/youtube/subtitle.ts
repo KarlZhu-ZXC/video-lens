@@ -46,6 +46,8 @@ export async function getYoutubeTranscript(
       lastError = error;
     }
   }
+  const panelTranscript = await readYoutubeTranscriptPanel(video.sourceId, candidates[0]);
+  if (panelTranscript?.charCount) return panelTranscript;
   throw lastError instanceof Error ? lastError : new Error('当前 YouTube 视频没有可读取字幕');
 }
 
@@ -208,15 +210,17 @@ function uniqueCaptionTracks(tracks: Array<YoutubeCaptionTrack | undefined>): Yo
 }
 
 async function downloadYoutubeCaptionTrack(track: YoutubeCaptionTrack): Promise<Transcript> {
-  const url = withCaptionFormat(track.baseUrl, 'json3');
-  const res = await fetch(url, { credentials: 'include' });
-  if (!res.ok) throw new Error(`YouTube 字幕请求失败：${res.status}`);
-  const text = await res.text();
-  try {
-    return parseYoutubeJson3Transcript(JSON.parse(text), track);
-  } catch {
-    return parseYoutubeXmlTranscript(text, track);
+  let lastError: unknown;
+  for (const url of youtubeCaptionDownloadUrls(track)) {
+    try {
+      const transcript = await downloadYoutubeCaptionUrl(url, track);
+      if (transcript.charCount > 0) return transcript;
+      lastError = new Error(`YouTube 字幕为空：${track.label}`);
+    } catch (error) {
+      lastError = error;
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error(`YouTube 字幕为空：${track.label}`);
 }
 
 async function fetchYoutubeWatchCaptionTracks(videoId: string): Promise<YoutubeCaptionTrack[]> {
@@ -236,6 +240,237 @@ function withCaptionFormat(baseUrl: string, format: string): string {
   const url = new URL(baseUrl);
   url.searchParams.set('fmt', format);
   return url.toString();
+}
+
+function youtubeCaptionDownloadUrls(track: YoutubeCaptionTrack): string[] {
+  return uniqueStrings([
+    withCaptionFormat(track.baseUrl, 'json3'),
+    withCaptionFormat(track.baseUrl, 'srv3'),
+    withCaptionFormat(track.baseUrl, 'vtt'),
+    ...buildUnsignedTimedTextUrls(track),
+  ]);
+}
+
+async function downloadYoutubeCaptionUrl(url: string, track: YoutubeCaptionTrack): Promise<Transcript> {
+  const res = await fetch(url, { credentials: 'include' });
+  if (!res.ok) throw new Error(`YouTube 字幕请求失败：${res.status}`);
+  const text = await res.text();
+  if (!text.trim()) return emptyYoutubeTranscript(track);
+  try {
+    return parseYoutubeJson3Transcript(JSON.parse(text), track);
+  } catch {
+    const xmlTranscript = parseYoutubeXmlTranscript(text, track);
+    if (xmlTranscript.charCount > 0) return xmlTranscript;
+    return parseYoutubeVttTranscript(text, track);
+  }
+}
+
+function buildUnsignedTimedTextUrls(track: YoutubeCaptionTrack): string[] {
+  let source: URL;
+  try {
+    source = new URL(track.baseUrl);
+  } catch {
+    return [];
+  }
+  const videoId = source.searchParams.get('v');
+  const lang = source.searchParams.get('lang') ?? track.languageCode;
+  if (!videoId || !lang) return [];
+  const formats = ['json3', 'srv3', 'vtt'];
+  return formats.map((format) => {
+    const url = new URL('/api/timedtext', 'https://www.youtube.com');
+    url.searchParams.set('v', videoId);
+    url.searchParams.set('lang', lang);
+    url.searchParams.set('fmt', format);
+    const name = source.searchParams.get('name');
+    const kind = source.searchParams.get('kind');
+    const tlang = source.searchParams.get('tlang');
+    if (name) url.searchParams.set('name', name);
+    if (kind) url.searchParams.set('kind', kind);
+    if (tlang) url.searchParams.set('tlang', tlang);
+    return url.toString();
+  });
+}
+
+export function parseYoutubeVttTranscript(input: string, track: YoutubeCaptionTrack): Transcript {
+  const lines = input
+    .split(/\n{2,}/)
+    .map((block) => {
+      const parts = block.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const timeIndex = parts.findIndex((line) => line.includes('-->'));
+      if (timeIndex < 0) return undefined;
+      const [fromRaw, toRaw] = parts[timeIndex].split('-->').map((part) => part.trim());
+      const text = parts.slice(timeIndex + 1)
+        .map((line) => decodeXmlEntities(stripXmlTags(line)))
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!text) return undefined;
+      return {
+        from: parseVttTimestamp(fromRaw),
+        to: parseVttTimestamp(toRaw),
+        text,
+      };
+    })
+    .filter((line: SubtitleLine | undefined): line is SubtitleLine => Boolean(line));
+  const plainText = lines.map(formatLine).join('\n');
+  return {
+    language: track.label,
+    languageCode: track.languageCode,
+    lines,
+    plainText,
+    charCount: plainText.length,
+  };
+}
+
+function emptyYoutubeTranscript(track: YoutubeCaptionTrack): Transcript {
+  return {
+    language: track.label,
+    languageCode: track.languageCode,
+    lines: [],
+    plainText: '',
+    charCount: 0,
+  };
+}
+
+function parseVttTimestamp(input: string): number {
+  const normalized = input.split(/\s+/)[0] ?? '';
+  const parts = normalized.split(':');
+  const seconds = Number(parts.pop()?.replace(',', '.') ?? 0);
+  const minutes = Number(parts.pop() ?? 0);
+  const hours = Number(parts.pop() ?? 0);
+  return (Number.isFinite(hours) ? hours : 0) * 3600 +
+    (Number.isFinite(minutes) ? minutes : 0) * 60 +
+    (Number.isFinite(seconds) ? seconds : 0);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+async function readYoutubeTranscriptPanel(
+  videoId: string,
+  track: YoutubeCaptionTrack | undefined,
+): Promise<Transcript | undefined> {
+  if (!isCurrentYoutubeVideo(videoId) || typeof document === 'undefined') return undefined;
+  const existing = parseYoutubeTranscriptPanel(track);
+  if (existing.charCount > 0) return existing;
+
+  clickYoutubeTranscriptButton();
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    await wait(250);
+    const transcript = parseYoutubeTranscriptPanel(track);
+    if (transcript.charCount > 0) return transcript;
+  }
+  return undefined;
+}
+
+function isCurrentYoutubeVideo(videoId: string): boolean {
+  if (typeof location === 'undefined' || !videoId) return false;
+  try {
+    const url = new URL(location.href);
+    return /(^|\.)youtube\.com$/.test(url.hostname) &&
+      (url.searchParams.get('v') === videoId || url.pathname === `/shorts/${videoId}`);
+  } catch {
+    return false;
+  }
+}
+
+function clickYoutubeTranscriptButton(): void {
+  const pattern = /(show transcript|transcript|显示文字稿|显示转录|文字稿|字幕稿)/i;
+  const closePattern = /(close transcript|关闭)/i;
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>(
+    'button, ytd-button-renderer, tp-yt-paper-button',
+  ));
+  const target = candidates.find((element) => {
+    const label = [
+      element.getAttribute('aria-label') ?? '',
+      element.getAttribute('title') ?? '',
+      element.textContent ?? '',
+    ].join(' ').replace(/\s+/g, ' ').trim();
+    return pattern.test(label) && !closePattern.test(label);
+  });
+  target?.click();
+}
+
+function parseYoutubeTranscriptPanel(track: YoutubeCaptionTrack | undefined): Transcript {
+  const segments = readYoutubeTranscriptSegments();
+  if (!segments.length) return emptyYoutubeTranscript(track ?? {
+    id: 'youtube-transcript-panel',
+    label: 'YouTube transcript',
+    languageCode: 'und',
+    baseUrl: '',
+  });
+  const lines = segments.map((segment, index) => ({
+    from: segment.from,
+    to: segments[index + 1]?.from ?? segment.from + 4,
+    text: segment.text,
+  }));
+  const plainText = lines.map(formatLine).join('\n');
+  return {
+    language: track?.label ?? 'YouTube transcript',
+    languageCode: track?.languageCode,
+    lines,
+    plainText,
+    charCount: plainText.length,
+  };
+}
+
+function readYoutubeTranscriptSegments(): Array<{ from: number; text: string }> {
+  const segmentNodes = Array.from(document.querySelectorAll<HTMLElement>('ytd-transcript-segment-renderer'));
+  const fromSegmentNodes = segmentNodes
+    .map(readYoutubeTranscriptSegmentNode)
+    .filter((line: { from: number; text: string } | undefined): line is { from: number; text: string } => Boolean(line));
+  if (fromSegmentNodes.length) return fromSegmentNodes;
+
+  const panels = Array.from(document.querySelectorAll<HTMLElement>(
+    'ytd-transcript-renderer, ytd-engagement-panel-section-list-renderer[target-id*="transcript"]',
+  ));
+  return panels.flatMap((panel) => readYoutubeTranscriptLinesFromText(panel.textContent ?? ''));
+}
+
+function readYoutubeTranscriptSegmentNode(node: HTMLElement): { from: number; text: string } | undefined {
+  const timestamp = textFromSelector(node, '#timestamp, .segment-timestamp, [class*="timestamp"]') ??
+    readFirstTimestamp(node.textContent ?? '');
+  const rawText = textFromSelector(node, '#segment-text, .segment-text, yt-formatted-string:not(#timestamp)') ??
+    stripLeadingTimestamp(node.textContent ?? '');
+  const text = rawText.replace(/\s+/g, ' ').trim();
+  if (!timestamp || !text) return undefined;
+  return { from: parseYoutubeTimestamp(timestamp), text };
+}
+
+function readYoutubeTranscriptLinesFromText(input: string): Array<{ from: number; text: string }> {
+  return input
+    .split(/\n|\r|(?=\b\d{1,2}:\d{2}(?::\d{2})?\b)/)
+    .map((line) => {
+      const match = line.trim().match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$/);
+      if (!match) return undefined;
+      const text = match[2].replace(/\s+/g, ' ').trim();
+      return text ? { from: parseYoutubeTimestamp(match[1]), text } : undefined;
+    })
+    .filter((line: { from: number; text: string } | undefined): line is { from: number; text: string } => Boolean(line));
+}
+
+function textFromSelector(node: HTMLElement, selector: string): string | undefined {
+  return node.querySelector<HTMLElement>(selector)?.textContent?.trim() || undefined;
+}
+
+function readFirstTimestamp(input: string): string | undefined {
+  return input.match(/\b\d{1,2}:\d{2}(?::\d{2})?\b/)?.[0];
+}
+
+function stripLeadingTimestamp(input: string): string {
+  return input.replace(/^\s*\d{1,2}:\d{2}(?::\d{2})?\s*/, '');
+}
+
+function parseYoutubeTimestamp(input: string): number {
+  const parts = input.split(':').map((part) => Number(part));
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function withCaptionTranslation(baseUrl: string, language: string): string {
