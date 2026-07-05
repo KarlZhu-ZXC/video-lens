@@ -111,6 +111,10 @@ import {
   parseYoutubeXmlTranscript,
   selectYoutubeCaptionTrack,
 } from '../src/sources/youtube/subtitle';
+import {
+  clearCapturedYoutubeTimedTextForTest,
+  rememberYoutubeTimedTextCapture,
+} from '../src/sources/youtube/timedtextCapture';
 
 describe('renderPrompt', () => {
   it('renders compatible localized prompt templates', () => {
@@ -1059,6 +1063,81 @@ Next &amp; line`,
     Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
   });
 
+  it('uses captured YouTube timedtext when direct caption downloads are empty', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = globalThis.document;
+    const originalLocation = globalThis.location;
+    clearCapturedYoutubeTimedTextForTest();
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { href: 'https://www.youtube.com/watch?v=yt-pot' },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        ytInitialPlayerResponse: {
+          videoDetails: { videoId: 'yt-pot' },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [
+                {
+                  baseUrl: 'https://www.youtube.com/api/timedtext?v=yt-pot&lang=en-US&kind=asr&exp=xpe',
+                  languageCode: 'en-US',
+                  name: { simpleText: 'English (United States)' },
+                  kind: 'asr',
+                },
+              ],
+            },
+          },
+        },
+        setTimeout: (callback: () => void) => {
+          callback();
+          return 0 as any;
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        scripts: [],
+        title: 'Captured - YouTube',
+        querySelector: () => undefined,
+        querySelectorAll: () => [] as any,
+      },
+    });
+    globalThis.fetch = vi.fn(async () => new Response('', { status: 200 })) as any;
+    rememberYoutubeTimedTextCapture({
+      url: 'https://www.youtube.com/api/timedtext?v=yt-pot&lang=en-US&kind=asr&fmt=json3&c=WEB&pot=test-token',
+      status: 200,
+      text: JSON.stringify({
+        events: [
+          { tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Captured player subtitle' }] },
+        ],
+      }),
+    });
+
+    const transcript = await getYoutubeTranscript(
+      {
+        source: 'youtube',
+        sourceId: 'yt-pot',
+        title: 'Captured',
+        url: 'https://www.youtube.com/watch?v=yt-pot',
+      },
+      'en-US',
+      'en-US',
+      DEFAULT_CONFIG,
+    );
+
+    expect(transcript.languageCode).toBe('en-US');
+    expect(transcript.plainText).toContain('Captured player subtitle');
+    clearCapturedYoutubeTimedTextForTest();
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+  });
+
   it('expands YouTube description before opening the transcript panel fallback', async () => {
     const originalFetch = globalThis.fetch;
     const originalWindow = (globalThis as any).window;
@@ -1160,7 +1239,7 @@ Next &amp; line`,
     Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, value: originalGetComputedStyle });
   });
 
-  it('uses YouTube chapter outline when captions and transcript panel are unavailable', async () => {
+  it('does not use YouTube chapter outline as a transcript fallback', async () => {
     const originalFetch = globalThis.fetch;
     const originalWindow = (globalThis as any).window;
     const originalDocument = globalThis.document;
@@ -1211,7 +1290,7 @@ Next &amp; line`,
     });
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ events: [] }), { status: 200 })) as any;
 
-    const transcript = await getYoutubeTranscript(
+    await expect(getYoutubeTranscript(
       {
         source: 'youtube',
         sourceId: 'yt-chapters',
@@ -1221,12 +1300,8 @@ Next &amp; line`,
       'en-US',
       'en-US',
       DEFAULT_CONFIG,
-    );
+    )).rejects.toThrow('YouTube 字幕为空：English (United States)');
 
-    expect(transcript.language).toBe('English (United States) chapters');
-    expect(transcript.plainText).toContain('using the video chapter outline as fallback');
-    expect(transcript.plainText).toContain('[00:00] Intro');
-    expect(transcript.plainText).toContain('[00:15] Thing 1');
     globalThis.fetch = originalFetch;
     Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
     Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });

@@ -5,6 +5,7 @@ import { Panel } from './ui/panel';
 import { logger } from './utils/logger';
 import { isChatGptPage, startChatGptImageReceiver } from './ai/image/chatgptReceiver';
 import { claimVideoLensDocumentRuntime } from './runtime/singleton';
+import { startYoutubeTimedTextCapture } from './sources/youtube/timedtextCapture';
 
 declare global {
   interface Window {
@@ -58,6 +59,7 @@ async function bootstrap(): Promise<void> {
     return;
   }
   if (!isSupportedVideoUrl(location.href)) return;
+  if (/(^|\.)youtube\.com$/.test(location.hostname)) startYoutubeTimedTextCapture();
 
   const controller = new AppController();
   const panel = new Panel(controller);

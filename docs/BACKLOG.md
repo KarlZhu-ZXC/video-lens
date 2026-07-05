@@ -1,7 +1,7 @@
 # 工程 Backlog
 
 这里只记录尚未落地的工程风险和建议。已完成功能与状态见
-[`FEATURES.md`](../FEATURES.md)，验证历史见 [`README.md`](./README.md)。
+[`FEATURES.md`](./FEATURES.md)，验证历史见 [`progress/README.md`](../progress/README.md)。
 
 最后更新：2026-06-21
 

@@ -39,6 +39,7 @@ export default defineConfig({
           'GM_openInTab',
           'GM_xmlhttpRequest',
           'GM_setClipboard',
+          'unsafeWindow',
         ],
         license: 'MIT',
       },

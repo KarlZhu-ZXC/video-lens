@@ -95,9 +95,9 @@ UI harness 默认运行在 `http://127.0.0.1:5173/harness.html`。
 YouTube API 凭据仅由用户在设置页填写，并存入 Tampermonkey storage；密码输入框不会回填
 已保存值。用于可选集成测试的 `.env.local` 已被 Git 忽略，且生产源码不会读取或打包该文件。
 
-更多功能说明见 [FEATURES.md](./FEATURES.md)，当前进度和待办分别记录在
-[progress/README.md](./progress/README.md) 与
-[progress/PROJECT_REVIEW_RECOMMENDATIONS.md](./progress/PROJECT_REVIEW_RECOMMENDATIONS.md)。
+更多项目文档见 [docs/README.md](./docs/README.md)。功能规格、架构细节、当前进度和待办分别记录在
+[docs/FEATURES.md](./docs/FEATURES.md)、[docs/SPEC.md](./docs/SPEC.md)、
+[progress/README.md](./progress/README.md) 与 [docs/BACKLOG.md](./docs/BACKLOG.md)。
 
 ## 支持项目
 

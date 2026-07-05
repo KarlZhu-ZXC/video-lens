@@ -26,7 +26,7 @@ Video Lens（中文名“片语”）是运行在 Tampermonkey 中的 Bilibili /
 
 ## 视频与字幕
 
-provider registry 只负责视频站点来源，不参与模型配置。Bilibili 保持现有视频信息和 `upName` 兼容行为。YouTube 支持页面 `captionTracks`、同源 youtubei fallback、watch 页面字幕回读、JSON3/XML/VTT 字幕、人工/自动/翻译字幕和可选官方 API 元数据配置。当 `timedtext` 字幕接口对当前视频返回空正文时，会在当前 YouTube 页面尝试读取官方 Transcript 面板 DOM 作为最后 fallback。
+provider registry 只负责视频站点来源，不参与模型配置。Bilibili 保持现有视频信息和 `upName` 兼容行为。YouTube 支持页面 `captionTracks`、同源 youtubei fallback、watch 页面字幕回读、JSON3/XML/VTT 字幕、人工/自动/翻译字幕和可选官方 API 元数据配置。当 `timedtext` 字幕接口对当前视频返回空正文时，会优先复用当前页面播放器已经成功获取到的 `/api/timedtext` 响应，再尝试读取官方 Transcript 面板 DOM 作为最后 fallback。
 
 ## 模型配置
 

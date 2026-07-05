@@ -8,6 +8,7 @@ import {
 import { parseYoutubeCaptionTracks, readYoutubePlayerResponse, readYoutubePlayerResponseFromHtml } from './videoInfo';
 import type { YoutubeCaptionTrack } from './types';
 import { fetchYoutubeiCaptionTracks } from './youtubei';
+import { findCapturedYoutubeTimedText } from './timedtextCapture';
 
 export async function getYoutubeSubtitleOptions(video: VideoInfo, config?: LocalConfig): Promise<SubtitleOption[]> {
   const strategy = config?.source.youtube?.captionStrategy ?? 'auto';
@@ -46,10 +47,12 @@ export async function getYoutubeTranscript(
       lastError = error;
     }
   }
+  for (const track of candidates) {
+    const capturedTranscript = readCapturedYoutubeTimedText(video.sourceId, track);
+    if (capturedTranscript?.charCount) return capturedTranscript;
+  }
   const panelTranscript = await readYoutubeTranscriptPanel(video.sourceId, candidates[0]);
   if (panelTranscript?.charCount) return panelTranscript;
-  const chapterTranscript = readYoutubeChapterOutlineTranscript(candidates[0]);
-  if (chapterTranscript?.charCount) return chapterTranscript;
   throw lastError instanceof Error ? lastError : new Error('当前 YouTube 视频没有可读取字幕');
 }
 
@@ -258,6 +261,17 @@ async function downloadYoutubeCaptionUrl(url: string, track: YoutubeCaptionTrack
   if (!res.ok) throw new Error(`YouTube 字幕请求失败：${res.status}`);
   const text = await res.text();
   if (!text.trim()) return emptyYoutubeTranscript(track);
+  return parseYoutubeCaptionText(text, track);
+}
+
+function readCapturedYoutubeTimedText(videoId: string, track: YoutubeCaptionTrack): Transcript | undefined {
+  const captured = findCapturedYoutubeTimedText(videoId, track);
+  if (!captured) return undefined;
+  const transcript = parseYoutubeCaptionText(captured.text, track);
+  return transcript.charCount > 0 ? transcript : undefined;
+}
+
+function parseYoutubeCaptionText(text: string, track: YoutubeCaptionTrack): Transcript {
   try {
     return parseYoutubeJson3Transcript(JSON.parse(text), track);
   } catch {
@@ -449,53 +463,6 @@ function parseYoutubeTranscriptPanel(track: YoutubeCaptionTrack | undefined): Tr
     plainText,
     charCount: plainText.length,
   };
-}
-
-function readYoutubeChapterOutlineTranscript(track: YoutubeCaptionTrack | undefined): Transcript | undefined {
-  if (typeof document === 'undefined') return undefined;
-  const chapterNodes = Array.from(document.querySelectorAll<HTMLElement>(
-    'ytd-macro-markers-list-item-renderer',
-  ));
-  const lines = uniqueSubtitleLines(chapterNodes
-    .map((node) => parseYoutubeChapterLine(node.textContent ?? ''))
-    .filter((line: SubtitleLine | undefined): line is SubtitleLine => Boolean(line)));
-  if (!lines.length) return undefined;
-  const plainText = [
-    '[00:00] YouTube transcript was unavailable; using the video chapter outline as fallback.',
-    ...lines.map(formatLine),
-  ].join('\n');
-  return {
-    language: track?.label ? `${track.label} chapters` : 'YouTube chapters',
-    languageCode: track?.languageCode,
-    lines,
-    plainText,
-    charCount: plainText.length,
-  };
-}
-
-function parseYoutubeChapterLine(input: string): SubtitleLine | undefined {
-  const normalized = input.replace(/\s+/g, ' ').trim();
-  const timestamp = readFirstTimestamp(normalized);
-  if (!timestamp) return undefined;
-  const title = dedupeRepeatedChapterTitle(normalized.slice(0, normalized.indexOf(timestamp)).trim());
-  if (!title || /^章节|chapters?$/i.test(title)) return undefined;
-  const from = parseYoutubeTimestamp(timestamp);
-  return { from, to: from, text: title };
-}
-
-function dedupeRepeatedChapterTitle(input: string): string {
-  const repeated = input.match(/^(.+?)\s+\1$/);
-  return (repeated?.[1] ?? input).trim();
-}
-
-function uniqueSubtitleLines(lines: SubtitleLine[]): SubtitleLine[] {
-  const seen = new Set<string>();
-  return lines.filter((line) => {
-    const key = `${line.from}:${line.text}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function readYoutubeTranscriptSegments(): Array<{ from: number; text: string }> {
