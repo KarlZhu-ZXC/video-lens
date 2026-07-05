@@ -1982,6 +1982,14 @@ describe('ui i18n', () => {
 });
 
 describe('panel resizing', () => {
+  it('uses one shared shell width for summary and settings tabs', () => {
+    const shellRule = /\.vs-shell \{([^}]*)\}/.exec(PANEL_STYLES)?.[1] ?? '';
+
+    expect(shellRule).toContain('width: min(calc(var(--vs-width, 420px) + var(--vs-rail-width)), calc(100vw - 16px));');
+    expect(PANEL_STYLES).not.toContain('.vs-shell.summary {');
+    expect(PANEL_STYLES).not.toContain('+ 50px');
+  });
+
   it('clamps and persists panel width without a settings toast', () => {
     expect(DEFAULT_CONFIG.ui.panelWidth).toBe(420);
     expect(clampPanelWidth(260)).toBe(300);

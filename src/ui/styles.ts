@@ -231,14 +231,6 @@ button.icon svg {
   box-shadow: var(--vs-shadow);
 }
 
-.vs-shell.wide {
-  width: min(calc(var(--vs-width, 420px) + var(--vs-rail-width)), calc(100vw - 16px));
-}
-
-.vs-shell.summary {
-  width: min(calc(var(--vs-width, 420px) + var(--vs-rail-width) + 50px), calc(100vw - 16px));
-}
-
 .vs-shell.right { right: 0; }
 .vs-shell.left {
   left: 0;
@@ -2431,9 +2423,7 @@ select:focus {
     right: auto;
   }
 
-  .vs-shell,
-  .vs-shell.wide,
-  .vs-shell.summary {
+  .vs-shell {
     width: 100vw;
   }
 

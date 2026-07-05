@@ -264,9 +264,7 @@ export class Panel {
   }
 
   private toastPanelWidth(): number {
-    const baseWidth = this.controller.config.ui.panelWidth;
-    if (this.activeTab === 'summary') return baseWidth + 50;
-    return baseWidth;
+    return this.controller.config.ui.panelWidth;
   }
 
   private renderActiveTab(): HTMLElement {

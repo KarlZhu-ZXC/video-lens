@@ -37,6 +37,7 @@ This file is the restart point for future agent sessions. Keep entries short, fa
 - 2026-07-05: YouTube subtitle loading now also tries JSON3, SRV3, VTT, unsigned timedtext URLs, and finally the current page's Transcript panel DOM when caption downloads return empty content; clearing the current video cache now removes all summary variants for that video and resets transcript/runtime summary state.
 - 2026-07-05: Settings labels now use Text Configuration, Image Configuration, Summary Style Preset, and Model Connectivity Test; the summary style preset control moved from General into Text Configuration.
 - 2026-07-05: Summary style and image style controls now appear first in their settings sections; legacy square image size `1024x1024` now migrates to the 16:9 default; YouTube transcript fallback recognizes Chinese transcript controls and falls back to the chapter outline when caption and transcript endpoints return empty content.
+- 2026-07-05: Settings and summary tabs now share the same outer Shell width; tab switching only replaces panel content and no longer applies a summary-specific width offset. Verification used `./node_modules/.bin/vitest run`, `./node_modules/.bin/tsc --noEmit`, and `./node_modules/.bin/vite build` because `./init.sh` hit pnpm's ignored-builds guard for esbuild.
 
 ## Open Risks
 
